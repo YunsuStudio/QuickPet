@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: file: blob: https: quickpet-model: quickpet-preview:; connect-src 'self' data: blob: quickpet-model: quickpet-preview:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>快捷宠</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="index-theme.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="titlebar">
+      <div class="titlebar-brand">
+        <span class="brand-dot">Q</span>
+        <span>快捷宠</span>
+        <span class="titlebar-subtitle">个人快捷启动台</span>
+      </div>
+      <div class="window-actions">
+        <button id="notificationButton" class="window-button notification-button" aria-label="通知中心">●<b id="notificationBadge" class="hidden">0</b></button>
+        <button id="minimizeButton" class="window-button" aria-label="最小化">—</button>
+        <button id="closeButton" class="window-button close" aria-label="关闭">×</button>
+      </div>
+    </header>
+
+    <div class="workspace">
+      <aside class="sidebar">
+        <div class="sidebar-scroll">
+          <p class="sidebar-label">视图</p>
+          <nav id="quickNav" class="nav-list">
+            <button class="nav-item active" data-view="all"><span>◈</span><span>全部</span><b id="allCount">0</b></button>
+            <button class="nav-item" data-view="favorites"><span>★</span><span>收藏</span><b id="favoriteCount">0</b></button>
+            <button class="nav-item" data-view="recent"><span>◷</span><span>最近使用</span></button>
+          </nav>
+
+          <div class="sidebar-section-title">
+            <p class="sidebar-label">分类</p>
+            <button id="manageCategoriesButton" class="mini-icon-button" title="管理分类">⚙</button>
+          </div>
+          <nav id="categoryNav" class="nav-list"></nav>
+        </div>
+
+        <div class="sidebar-bottom">
+          <button id="addFromSidebar" class="primary-button wide">＋ 添加快捷方式</button>
+          <button class="nav-item settings-nav" data-view="automation"><span>✦</span><span>自动化中心</span></button>
+          <button id="settingsButton" class="nav-item settings-nav" data-view="settings"><span>⚙</span><span>设置与外观</span></button>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <section id="libraryView" class="view-section">
+          <div class="toolbar">
+            <div>
+              <p class="eyebrow" id="currentEyebrow">启动台</p>
+              <h1 id="viewTitle">全部快捷方式</h1>
+            </div>
+            <div class="toolbar-actions">
+              <label class="search-box">
+                <span>⌕</span>
+                <input id="searchInput" type="search" placeholder="搜索名称、标签或地址">
+              </label>
+              <select id="sortSelect" class="select-control" title="排序方式">
+                <option value="recent">智能排序</option>
+                <option value="manual">手动排序</option>
+                <option value="name">按名称</option>
+                <option value="created">最新添加</option>
+                <option value="used">最常使用</option>
+              </select>
+              <button id="addButton" class="primary-button">＋ 添加</button>
+            </div>
+          </div>
+
+          <div id="summaryBar" class="summary-bar">
+            <span id="summaryText">还没有快捷方式</span>
+            <button id="checkButton" class="text-button">检查可用性</button>
+          </div>
+
+          <div id="shortcutGrid" class="shortcut-grid"></div>
+          <div id="emptyState" class="empty-state">
+            <div class="empty-pet">✦</div>
+            <h2>暂无快捷项目</h2>
+            <p>添加网址、软件、文件或文件夹。</p>
+            <button id="emptyAddButton" class="primary-button">立即添加</button>
+          </div>
+        </section>
+
+        <section id="settingsView" class="view-section settings-view hidden">
+          <div class="toolbar settings-heading">
+            <div>
+              <p class="eyebrow">系统</p>
+              <h1>设置与外观</h1>
+            </div>
+          </div>
+
+          <div id="safeModeBanner" class="safe-mode-banner hidden"><span><b>安全模式</b><small>上次运行异常，当前使用 2D 低负载配置</small></span><button id="exitSafeModeButton" class="secondary-button">恢复原配置</button></div>
+
+          <div class="settings-grid">
+            <article class="settings-card">
+              <div class="settings-card-heading"><span class="settings-icon">◐</span><div><h2>界面外观</h2><p>调整主题、强调色和面板大小</p></div></div>
+              <div class="setting-row"><label for="themeSelect">主题</label><select id="themeSelect" class="select-control"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></div>
+              <div class="setting-row"><label for="accentInput">强调色</label><input id="accentInput" type="color" value="#171717"></div>
+              <div class="setting-row range-row"><label for="opacityInput">面板透明度 <span id="opacityValue"></span></label><input id="opacityInput" type="range" min="72" max="100" step="1"></div>
+              <div class="setting-row"><label for="panelSizeSelect">面板大小</label><select id="panelSizeSelect" class="select-control"><option value="900x620">紧凑</option><option value="1040x720">标准</option><option value="1220x820">宽大</option></select></div>
+              <div class="setting-row"><label for="performanceModeSelect">性能模式</label><select id="performanceModeSelect" class="select-control"><option value="efficient">无感模式</option><option value="balanced">平衡</option><option value="quality">高画质</option></select></div>
+              <p id="performanceModeHint" class="maintenance-copy performance-hint"></p>
+            </article>
+
+            <article class="settings-card pet-settings-card">
+              <div class="settings-card-heading"><span class="settings-icon">♡</span><div><h2>桌宠档案</h2><p>名字、心情和日常互动都会保存在本机</p></div></div>
+              <label class="pet-name-field"><span>名字</span><input id="petNameInput" class="text-control" maxlength="20" value="暖暖"></label>
+              <div class="pet-vitals">
+                <div><span>心情 <b id="moodValue">82</b></span><i><em id="moodBar"></em></i></div>
+                <div><span>饱食 <b id="hungerValue">76</b></span><i><em id="hungerBar"></em></i></div>
+                <div><span>亲密 <b id="affectionValue">20</b></span><i><em id="affectionBar"></em></i></div>
+              </div>
+              <div class="button-row"><button id="feedPetButton" class="secondary-button">喂食</button><button id="playPetButton" class="ghost-button">陪它玩</button></div>
+              <div class="setting-row"><label for="petRenderModeSelect">桌宠模式</label><select id="petRenderModeSelect" class="select-control"><option value="2d">2D 自定义皮肤</option><option value="3d">3D 动态动物</option></select></div>
+              <div class="skin-preview"><img id="skinPreview" src="../../assets/default-pet.svg" alt="桌宠预览"><span id="skinName">默认暖暖猫</span></div>
+              <p id="skinStatus" class="skin-status">默认皮肤已经是透明背景</p>
+              <label class="switch-row"><span><b>上传后自动抠图</b><small>照片只在本机处理，不会上传</small></span><input id="autoRemoveBackgroundInput" type="checkbox"><i></i></label>
+              <div class="button-row skin-buttons"><button id="chooseSkinButton" class="secondary-button">选择图片</button><button id="processSkinButton" class="ghost-button">重新抠图</button><button id="useOriginalSkinButton" class="ghost-button">使用原图</button><button id="resetSkinButton" class="ghost-button">恢复默认</button></div>
+              <div class="setting-row range-row"><label for="petScaleInput">桌宠大小 <span id="petScaleValue"></span></label><input id="petScaleInput" type="range" min="70" max="145" step="5"></div>
+            </article>
+
+            <article class="settings-card settings-card-wide model-center-card">
+              <div class="settings-card-heading model-heading"><span class="settings-icon">3D</span><div><h2>模型预览仓库</h2><p>支持 GLB、VRM 与 Live2D model3.json；旧版白模会自动恢复贴图</p></div><div class="heading-actions"><button id="chooseModelButton" class="secondary-button">＋ 导入模型</button><button id="openModelLibraryButton" class="ghost-button">推荐模型</button></div></div>
+              <div id="modelLibraryList" class="model-library-list"></div>
+              <div id="activeModelEditor" class="model-editor hidden">
+                <div class="model-editor-title"><div><b>模型校正与动作</b><small id="petModelName">尚未导入 GLB</small></div><button id="deleteModelButton" class="text-button danger-text">删除当前模型</button></div>
+                <div class="model-control-grid">
+                  <label><span>显示名称</span><input id="modelNameInput" class="text-control" maxlength="80"></label>
+                  <label><span>大小 <b id="modelScaleValue">100%</b></span><input id="modelScaleInput" type="range" min="25" max="300" step="5"></label>
+                  <label><span>水平旋转 <b id="modelRotationValue">0°</b></span><input id="modelRotationInput" type="range" min="-180" max="180" step="5"></label>
+                  <label><span>上下位置 <b id="modelVerticalValue">0</b></span><input id="modelVerticalInput" type="range" min="-150" max="150" step="5"></label>
+                  <label class="compact-switch"><input id="modelFlipInput" type="checkbox"><span>反转模型朝向</span></label>
+                </div>
+                <div class="animation-map" id="animationMapEditor">
+                  <label><span>待机</span><select id="animationIdleSelect" data-animation="idle" class="select-control"></select></label>
+                  <label><span>走路</span><select id="animationWalkSelect" data-animation="walk" class="select-control"></select></label>
+                  <label><span>奔跑</span><select id="animationRunSelect" data-animation="run" class="select-control"></select></label>
+                  <label><span>坐下</span><select id="animationSitSelect" data-animation="sit" class="select-control"></select></label>
+                  <label><span>睡觉</span><select id="animationSleepSelect" data-animation="sleep" class="select-control"></select></label>
+                  <label><span>伸懒腰</span><select id="animationStretchSelect" data-animation="stretch" class="select-control"></select></label>
+                </div>
+              </div>
+            </article>
+
+            <article class="settings-card">
+              <div class="settings-card-heading"><span class="settings-icon">〽</span><div><h2>动作与性格</h2><p>散步、奔跑、观察、休息和夜间睡觉</p></div></div>
+              <label class="switch-row"><span><b>自然行为</b><small>随机坐下、观察、伸懒腰、睡觉或奔跑</small></span><input id="naturalBehaviorInput" type="checkbox"><i></i></label>
+              <label class="switch-row"><span><b>自动散步</b><small>在活动范围内自行移动</small></span><input id="autoWalkInput" type="checkbox"><i></i></label>
+              <label class="switch-row"><span><b>夜间睡觉</b><small>23:00 至 06:00 优先播放睡觉动作</small></span><input id="nightSleepInput" type="checkbox"><i></i></label>
+              <div class="setting-row range-row"><label for="walkSpeedInput">行走速度 <span id="walkSpeedValue"></span></label><input id="walkSpeedInput" type="range" min="18" max="110" step="4"></div>
+            </article>
+
+            <article class="settings-card">
+              <div class="settings-card-heading"><span class="settings-icon">▣</span><div><h2>桌面活动范围</h2><p>多显示器、全屏隐藏、吸边和边缘留白</p></div></div>
+              <div class="setting-row"><label for="petScreenModeSelect">活动屏幕</label><select id="petScreenModeSelect" class="select-control"><option value="current">当前屏幕</option><option value="all">跨所有屏幕</option></select></div>
+              <label class="switch-row"><span><b>桌宠保持置顶</b><small>始终显示在其他窗口上方</small></span><input id="alwaysOnTopInput" type="checkbox"><i></i></label>
+              <label class="switch-row"><span><b>全屏时自动隐藏</b><small>游戏或视频退出全屏后自动回来</small></span><input id="hideOnFullscreenInput" type="checkbox"><i></i></label>
+              <label class="switch-row"><span><b>靠近边缘自动吸附</b><small>拖到屏幕左右边缘时自动贴齐</small></span><input id="edgeSnapInput" type="checkbox"><i></i></label>
+              <div class="setting-row range-row"><label for="activityPaddingInput">边缘留白 <span id="activityPaddingValue"></span></label><input id="activityPaddingInput" type="range" min="0" max="300" step="10"></div>
+            </article>
+
+            <article class="settings-card">
+              <div class="settings-card-heading"><span class="settings-icon">⇣</span><div><h2>批量收纳</h2><p>先扫描预览，勾选后再导入，不会直接塞满列表</p></div></div>
+              <div class="scan-grid"><button class="secondary-button scan-button" data-scan="desktop">扫描桌面</button><button class="ghost-button scan-button" data-scan="start-menu">扫描开始菜单</button><button class="ghost-button scan-button" data-scan="bookmarks">导入浏览器书签</button><button class="primary-button scan-button" data-scan="all">扫描全部</button></div>
+            </article>
+
+            <article class="settings-card">
+              <div class="settings-card-heading"><span class="settings-icon">⌕</span><div><h2>全局快捷搜索</h2><p>在任何窗口里呼出紧凑搜索框</p></div></div>
+              <div class="setting-row"><label for="globalShortcutSelect">呼出快捷键</label><select id="globalShortcutSelect" class="select-control"><option value="Alt+Space">Alt + Space</option><option value="CommandOrControl+Alt+Space">Ctrl + Alt + Space</option></select></div>
+              <p class="maintenance-copy">按快捷键后输入名称、标签或路径，使用方向键选择，回车直接打开。</p>
+            </article>
+
+            <article class="settings-card settings-card-wide">
+              <div class="settings-card-heading"><span class="settings-icon">⌘</span><div><h2>快捷键台</h2><p>集中查看项目组合键与系统注册状态</p></div></div>
+              <div id="hotkeyCenterList" class="hotkey-center-list"></div>
+            </article>
+
+            <article class="settings-card">
+              <div class="settings-card-heading"><span class="settings-icon">▥</span><div><h2>本地使用统计</h2><p>只记录打开次数与最近使用时间</p></div><button id="resetUsageButton" class="ghost-button">清零</button></div>
+              <div id="usageStatsList" class="usage-stats-list"></div>
+            </article>
+
+            <article class="settings-card">
+              <div class="settings-card-heading"><span class="settings-icon">⇄</span><div><h2>换机迁移</h2><p>快捷方式、分类、设置与模型合并导出</p></div></div>
+              <div class="button-stack"><button id="exportMigrationButton" class="secondary-button">导出完整迁移包</button><button id="importMigrationButton" class="ghost-button">导入完整迁移包</button></div>
+            </article>
+
+            <article id="categorySettingsCard" class="settings-card settings-card-wide">
+              <div class="settings-card-heading"><span class="settings-icon">▦</span><div><h2>分类管理</h2><p>修改名称、图标、颜色和显示顺序</p></div></div>
+              <div id="categoryManager" class="category-manager"></div>
+              <form id="addCategoryForm" class="add-category-form">
+                <input id="newCategoryIcon" class="tiny-input" maxlength="4" value="✨" aria-label="分类图标">
+                <input id="newCategoryName" class="text-control" maxlength="16" placeholder="新分类名称" required>
+                <select id="newCategoryParent" class="select-control" aria-label="上级分类"><option value="">顶级分类</option></select>
+                <input id="newCategoryColor" type="color" value="#4a4a46" aria-label="分类颜色">
+                <button class="secondary-button" type="submit">添加分类</button>
+              </form>
+            </article>
+
+            <article class="settings-card">
+              <div class="settings-card-heading"><span class="settings-icon">↻</span><div><h2>启动与数据</h2><p>设置开机启动和本地备份</p></div></div>
+              <label class="switch-row"><span><b>开机自动启动</b><small>登录 Windows 后显示桌宠</small></span><input id="launchAtLoginInput" type="checkbox"><i></i></label>
+              <div class="button-stack"><button id="createBackupButton" class="secondary-button">立即备份</button><button id="exportButton" class="ghost-button">导出到文件</button><button id="importButton" class="ghost-button">从文件恢复</button></div>
+              <div id="backupList" class="backup-list"></div>
+            </article>
+
+            <article class="settings-card">
+              <div class="settings-card-heading"><span class="settings-icon">✓</span><div><h2>维护工具</h2><p>检查失效的网址、文件和程序</p></div></div>
+              <p class="maintenance-copy">检查只在你点击时进行。网址会发送一次轻量连接请求，本地项目会检查路径是否存在。</p>
+              <button id="settingsCheckButton" class="secondary-button wide">检查全部快捷方式</button>
+              <p class="version-line">快捷宠 <span id="versionText">v0.1.0</span> · 数据保存在本机</p>
+            </article>
+
+            <article class="settings-card">
+              <div class="settings-card-heading"><span class="settings-icon">↻</span><div><h2>软件更新</h2><p>支持同目录清单或 HTTPS 更新源</p></div></div>
+              <label class="switch-row"><span><b>启动时检查更新</b></span><input id="autoCheckUpdatesInput" type="checkbox"><i></i></label>
+              <details class="update-source"><summary>更新源</summary><input id="updateFeedInput" class="text-control" type="url" placeholder="https://.../latest.json"></details>
+              <p id="updateStatus" class="maintenance-copy">尚未检查</p>
+              <div class="button-row"><button id="checkUpdateButton" class="secondary-button">检查更新</button><button id="downloadUpdateButton" class="primary-button hidden">下载新版本</button></div>
+            </article>
+
+            <article class="settings-card settings-card-wide maintenance-desk">
+              <div class="settings-card-heading"><span class="settings-icon">⌫</span><div><h2>存储与卸载</h2><p>查看占用、清理缓存或移除程序</p></div><button id="refreshStorageButton" class="ghost-button">刷新</button></div>
+              <label class="switch-row portable-cleanup-switch"><span><b>发现旧版缓存时提醒</b><small>更新后询问是否删除旧版运行文件，不影响个人数据</small></span><input id="portableCacheCleanupPromptInput" type="checkbox"><i></i></label>
+              <div id="storageReport" class="storage-report"></div>
+              <div class="maintenance-actions"><button id="openDataButton" class="ghost-button">打开数据目录</button><button id="clearCacheButton" class="secondary-button">清理旧版缓存</button><label class="preserve-data"><input id="removeDataInput" type="checkbox"> 同时删除个人数据</label><button id="removeProgramButton" class="ghost-button danger-text">移除快捷宠</button></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="automationView" class="view-section settings-view hidden">
+          <div class="toolbar settings-heading automation-heading">
+            <div><p class="eyebrow">自动化</p><h1>规则、提醒与伙伴</h1></div>
+          </div>
+          <div class="settings-grid">
+            <article class="settings-card settings-card-wide">
+              <div class="settings-card-heading"><span class="settings-icon">✦</span><div><h2>智能分类规则</h2><p>新内容会按规则自动进入分类并追加标签</p></div></div>
+              <form id="ruleForm" class="automation-form rule-form">
+                <input id="ruleName" class="text-control" placeholder="规则名称" required>
+                <select id="ruleField" class="select-control"><option value="name">名称</option><option value="target">地址或路径</option><option value="type">类型</option><option value="extension">扩展名</option></select>
+                <select id="ruleOperator" class="select-control"><option value="contains">包含</option><option value="equals">等于</option><option value="starts">开头是</option></select>
+                <input id="ruleValue" class="text-control" placeholder="关键词，例如 psd" required>
+                <select id="ruleCategory" class="select-control"></select>
+                <input id="ruleTags" class="text-control" placeholder="追加标签，逗号分隔">
+                <button class="secondary-button" type="submit">添加规则</button>
+              </form>
+              <div id="ruleList" class="automation-list"></div>
+            </article>
+            <article class="settings-card">
+              <div class="settings-card-heading"><span class="settings-icon">⌘</span><div><h2>剪贴板快速收纳</h2><p>复制网址或本地路径后由桌宠提示</p></div></div>
+              <label class="switch-row"><span><b>监控剪贴板</b><small>只识别网址和已存在的本地路径</small></span><input id="clipboardMonitorInput" type="checkbox"><i></i></label>
+            </article>
+            <article class="settings-card">
+              <div class="settings-card-heading"><span class="settings-icon">▣</span><div><h2>文件夹动态分组</h2><p>文件夹新增的直接子项会自动收纳</p></div></div>
+              <button id="addWatchedFolderButton" class="secondary-button">选择文件夹</button>
+              <div id="watchedFolderList" class="automation-list compact-list"></div>
+            </article>
+            <article class="settings-card settings-card-wide">
+              <div class="settings-card-heading"><span class="settings-icon">◷</span><div><h2>提醒与通知中心</h2><p>桌宠和 Windows 通知同时提醒</p></div><div class="heading-actions"><button id="readNotificationsButton" class="ghost-button">全部已读</button><button id="clearNotificationsButton" class="ghost-button">清空</button></div></div>
+              <form id="reminderForm" class="automation-form reminder-form">
+                <input id="reminderTitle" class="text-control" placeholder="提醒内容" required>
+                <input id="reminderTime" class="text-control" type="datetime-local" required>
+                <select id="reminderRepeat" class="select-control"><option value="none">仅一次</option><option value="daily">每天</option><option value="weekdays">工作日</option><option value="weekly">每周</option><option value="monthly">每月</option></select>
+                <input id="reminderNote" class="text-control" placeholder="备注（可选）">
+                <button class="secondary-button" type="submit">添加提醒</button>
+              </form>
+              <div class="reminder-workspace">
+                <div class="calendar-panel">
+                  <div class="calendar-toolbar"><button id="calendarPreviousButton" title="上个月">‹</button><b id="calendarTitle"></b><button id="calendarTodayButton">今天</button><button id="calendarNextButton" title="下个月">›</button></div>
+                  <div class="calendar-weekdays"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+                  <div id="reminderCalendar" class="reminder-calendar"></div>
+                </div>
+                <div class="reminder-agenda">
+                  <div id="reminderFilters" class="segmented-control"><button class="active" data-reminder-filter="all">全部</button><button data-reminder-filter="today">今天</button><button data-reminder-filter="tomorrow">明天</button><button data-reminder-filter="week">本周</button></div>
+                  <div id="reminderList" class="automation-list"></div>
+                </div>
+              </div>
+              <div class="notification-section"><h3>最近通知</h3><div id="notificationList" class="automation-list notification-list"></div></div>
+            </article>
+            <article class="settings-card settings-card-wide">
+              <div class="settings-card-heading"><span class="settings-icon">∞</span><div><h2>多桌宠</h2><p>最多再添加四个伙伴，分别选择模型、大小和性格</p></div><button id="addCompanionButton" class="secondary-button">添加伙伴</button></div>
+              <div id="companionList" class="companion-grid"></div>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <div id="dropOverlay" class="drop-overlay hidden">
+    <div><span>＋</span><h2>松手即可收纳</h2><p>支持网址、程序、文件与文件夹</p></div>
+  </div>
+
+  <div id="shortcutModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <form id="shortcutForm" class="modal-card">
+      <div class="modal-heading"><div><p class="eyebrow">快捷收纳</p><h2 id="modalTitle">添加快捷方式</h2></div><button id="modalCloseButton" type="button" class="icon-button">×</button></div>
+      <input id="editIdInput" type="hidden">
+      <label class="field"><span>名称</span><input id="nameInput" class="text-control" maxlength="100" placeholder="可以留空，我会自动填写"></label>
+      <label class="field"><span>网址或本地路径</span><div class="input-with-button"><input id="targetInput" class="text-control" required placeholder="https://example.com 或 C:\\..."><button id="browseButton" type="button" class="secondary-button">浏览</button></div></label>
+      <div class="field-grid">
+        <label class="field"><span>类型</span><select id="typeInput" class="select-control"><option value="auto">自动识别</option><option value="website">网站</option><option value="app">程序</option><option value="folder">文件夹</option><option value="file">文件</option></select></label>
+        <label class="field"><span>分类</span><select id="categoryInput" class="select-control"><option value="">自动分类</option></select></label>
+      </div>
+      <label class="field"><span>快捷启动组合键</span><div class="hotkey-recorder"><input id="hotkeyInput" class="text-control" readonly placeholder="未设置"><button id="clearHotkeyButton" class="ghost-button" type="button" title="清除组合键">×</button></div></label>
+      <label class="field"><span>标签</span><input id="tagsInput" class="text-control" placeholder="用逗号分隔，例如：常用, 灵感"></label>
+      <label class="favorite-check"><input id="favoriteInput" type="checkbox"><span>加入收藏</span></label>
+      <div id="iconTools" class="icon-tools hidden"><span>图标美化</span><button id="refreshIconButton" class="ghost-button" type="button">自动提取</button><button id="chooseIconButton" class="ghost-button" type="button">选择图片</button><button id="clearIconButton" class="ghost-button" type="button">恢复默认</button><input id="iconBackgroundInput" type="color" value="#f1efff" title="图标底色"></div>
+      <div class="modal-actions"><button id="cancelButton" type="button" class="ghost-button">取消</button><button class="primary-button" type="submit">保存</button></div>
+    </form>
+  </div>
+
+  <div id="scanModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="scanModalTitle">
+    <div class="modal-card scan-modal-card">
+      <div class="modal-heading"><div><p class="eyebrow">批量收纳</p><h2 id="scanModalTitle">选择要导入的项目</h2></div><button id="scanModalCloseButton" type="button" class="icon-button">×</button></div>
+      <div class="scan-toolbar"><label><input id="scanSelectAllInput" type="checkbox" checked> 全选</label><span id="scanSelectionSummary">0 个项目</span></div>
+      <div id="scanPreviewList" class="scan-preview-list"></div>
+      <div class="modal-actions"><button id="scanCancelButton" class="ghost-button" type="button">取消</button><button id="scanImportButton" class="primary-button" type="button">导入所选项目</button></div>
+    </div>
+  </div>
+
+  <div id="modelPreviewModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modelPreviewTitle">
+    <div class="modal-card model-preview-modal">
+      <div class="modal-heading"><div><p class="eyebrow">模型体检台</p><h2 id="modelPreviewTitle">导入前预览</h2></div><button id="modelPreviewCloseButton" type="button" class="icon-button">×</button></div>
+      <div class="model-preview-layout">
+        <div class="model-preview-stage"><canvas id="modelPreview3dCanvas" class="hidden"></canvas><canvas id="modelPreviewLive2dCanvas" class="hidden"></canvas><div class="preview-floor"></div></div>
+        <div class="model-inspection-panel">
+          <label class="field"><span>保存名称</span><input id="modelPreviewName" class="text-control" maxlength="80"></label>
+          <div id="modelInspectionMetrics" class="inspection-metrics"></div>
+          <div id="modelInspectionIssues" class="inspection-issues"></div>
+        </div>
+      </div>
+      <div class="modal-actions"><button id="modelPreviewCancelButton" class="ghost-button" type="button">取消</button><button id="modelPreviewConfirmButton" class="primary-button" type="button">确认导入</button></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="vendor/live2dcubismcore.min.js"></script>
+  <script src="vendor/pet-3d.bundle.js"></script>
+  <script src="vendor/pet-live2d.bundle.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

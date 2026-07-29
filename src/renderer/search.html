@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https:; style-src 'self'; script-src 'self'">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>快捷搜索</title>
+  <link rel="stylesheet" href="search.css">
+</head>
+<body>
+  <main class="search-shell">
+    <label class="search-input-wrap"><span>⌕</span><input id="globalSearchInput" autocomplete="off" placeholder="搜索快捷方式或命令"></label>
+    <div class="search-meta"><span id="searchHint">全部快捷项目</span></div>
+    <section id="globalSearchResults" class="search-results"></section>
+  </main>
+  <script src="search.js"></script>
+</body>
+</html>

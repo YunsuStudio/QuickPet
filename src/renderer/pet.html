@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: file: blob: quickpet-model: quickpet-preview:; connect-src 'self' data: blob: quickpet-model: quickpet-preview:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>快捷宠</title>
+  <link rel="stylesheet" href="pet.css">
+</head>
+<body>
+  <div class="pet-stage" id="petStage">
+    <div id="speechBubble" class="speech-bubble">点我打开快捷面板</div>
+    <div id="clipboardBubble" class="clipboard-bubble hidden">
+      <b>发现可收纳内容</b><span id="clipboardTarget"></span>
+      <div><button id="clipboardAccept">收纳</button><button id="clipboardDismiss">忽略</button></div>
+    </div>
+    <div id="radialMenu" class="radial-menu hidden" role="menu">
+      <button data-radial="panel" title="打开面板">⌂</button>
+      <button data-radial="search" title="全局搜索">⌕</button>
+      <button data-radial="feed" title="喂食">♥</button>
+      <button data-radial="walk" title="暂停或继续散步">◌</button>
+      <button data-radial="model" title="切换 2D / 3D">3D</button>
+      <button data-radial="notifications" title="通知中心">●</button>
+    </div>
+    <button id="petButton" class="pet-button" aria-label="打开快捷面板">
+      <span class="pet-visual">
+        <canvas id="pet3dCanvas" class="pet-3d-canvas hidden" aria-label="3D 快捷宠"></canvas>
+        <canvas id="petLive2dCanvas" class="pet-3d-canvas hidden" aria-label="Live2D 桌宠"></canvas>
+        <img id="petImage" src="../../assets/default-pet.svg" alt="快捷宠">
+        <span class="pet-glow"></span>
+      </span>
+    </button>
+  </div>
+  <script src="vendor/live2dcubismcore.min.js"></script>
+  <script src="vendor/pet-3d.bundle.js"></script>
+  <script src="vendor/pet-live2d.bundle.js"></script>
+  <script src="../shared/pet-hit-region.js"></script>
+  <script src="pet.js"></script>
+</body>
+</html>
