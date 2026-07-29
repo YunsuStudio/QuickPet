@@ -129,6 +129,7 @@ class PetMotionController {
     this.lastCursorPoint = null;
     this.lastUserActivityAt = Date.now();
     this.nextHungerRestAt = 0;
+    this.windowSize = null;
   }
 
   start() {
@@ -173,13 +174,31 @@ class PetMotionController {
     this.engine.syncPosition(bounds.x);
   }
 
-  syncToWindow() {
+  syncToWindow(intendedSize = null) {
     const window = this.getWindow();
     if (!window || window.isDestroyed()) return;
     const bounds = window.getBounds();
+    this.windowSize = {
+      width: Math.max(1, Math.round(Number(intendedSize?.width) || bounds.width)),
+      height: Math.max(1, Math.round(Number(intendedSize?.height) || bounds.height))
+    };
     this.baseY = bounds.y;
     this.refreshBounds(bounds);
     this.engine.syncPosition(bounds.x);
+  }
+
+  moveTo(x, y) {
+    const window = this.getWindow();
+    if (!window || window.isDestroyed()) return;
+    const current = window.getBounds();
+    if (!this.windowSize) this.windowSize = { width: current.width, height: current.height };
+    const nextX = Math.round(x);
+    const nextY = Math.round(y);
+    if (typeof window.setBounds === 'function') {
+      window.setBounds({ x: nextX, y: nextY, width: this.windowSize.width, height: this.windowSize.height }, false);
+    } else {
+      window.setPosition(nextX, nextY, false);
+    }
   }
 
   refreshBounds(bounds) {
@@ -207,7 +226,7 @@ class PetMotionController {
     ];
     const closest = candidates.sort((a, b) => a.distance - b.distance)[0];
     if (closest.distance > threshold) return false;
-    window.setPosition(Math.round(closest.x), bounds.y, false);
+    this.moveTo(closest.x, bounds.y);
     this.engine.syncPosition(closest.x);
     return true;
   }
@@ -258,7 +277,7 @@ class PetMotionController {
     const motion = this.engine.tick(now, true, settings.naturalBehavior !== false);
     motion.focusX = Math.max(-1, Math.min(1, (cursor.x - (bounds.x + bounds.width / 2)) / Math.max(1, bounds.width * 1.4)));
     motion.focusY = Math.max(-1, Math.min(1, (cursor.y - (bounds.y + bounds.height / 2)) / Math.max(1, bounds.height * 1.4)));
-    if (motion.moved) window.setPosition(Math.round(motion.x), Math.round(this.baseY), false);
+    if (motion.moved) this.moveTo(motion.x, this.baseY);
     this.emitMotion(motion);
     return motion.moved ? movementInterval(settings.performanceMode) : 100;
   }

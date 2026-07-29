@@ -112,3 +112,36 @@ test('自然行为更倾向于开始移动而不是长时间停留', () => {
 
   assert.equal(engine.tick(1001, true, true).mode, 'walk');
 });
+
+test('跨不同缩放屏幕移动时持续使用桌宠的设计尺寸', () => {
+  let bounds = { x: 100, y: 500, width: 190, height: 230 };
+  const requests = [];
+  const window = {
+    isDestroyed: () => false,
+    getBounds: () => ({ ...bounds }),
+    setBounds: (next) => {
+      requests.push(next);
+      bounds = { ...next, width: next.width + 2, height: next.height + 2 };
+    },
+    webContents: { send: () => {} }
+  };
+  const display = { workArea: { x: -1536, y: 0, width: 1536, height: 960 } };
+  const controller = new PetMotionController({
+    getWindow: () => window,
+    getSettings: () => ({ activityPadding: 0, petScreenMode: 'current' }),
+    isPanelVisible: () => false,
+    screen: {
+      getDisplayMatching: () => display,
+      getAllDisplays: () => [display]
+    }
+  });
+
+  controller.syncToWindow();
+  controller.moveTo(-300, 460);
+  controller.moveTo(-500, 460);
+
+  assert.deepEqual(requests.map(({ width, height }) => ({ width, height })), [
+    { width: 190, height: 230 },
+    { width: 190, height: 230 }
+  ]);
+});

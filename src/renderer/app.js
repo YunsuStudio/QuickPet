@@ -476,7 +476,7 @@ function renderSettings() {
   $('#panelSizeSelect').value = [...$('#panelSizeSelect').options].some((option) => option.value === panelSize) ? panelSize : '1040x720';
   $('#performanceModeSelect').value = settings.performanceMode || 'efficient';
   $('#performanceModeHint').textContent = {
-    efficient: '待机约 10 帧，互动时自动提速，适合长期常驻。',
+    efficient: '待机约 30 帧、睡眠约 15 帧，互动时自动提速。',
     balanced: '提高模型清晰度与待机流畅度。',
     quality: '优先画质与抗锯齿，显卡占用会增加。'
   }[$('#performanceModeSelect').value];

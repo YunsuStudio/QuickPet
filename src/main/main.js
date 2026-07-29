@@ -38,7 +38,10 @@ const isUiTest = process.argv.includes('--ui-test');
 const isPerformanceTest = process.argv.includes('--performance-test');
 const isClickThroughTest = process.argv.includes('--click-through-test');
 const isDirectDragTest = process.argv.includes('--direct-drag-test');
-const isAutomatedTest = isSmokeTest || isBackgroundRemovalTest || isMotionTest || is3dTest || is3dModelTest || isUiTest || isPerformanceTest || isClickThroughTest || isDirectDragTest;
+const isCrossScreenTest = process.argv.includes('--cross-screen-test');
+const isCrossScreenDragTest = process.argv.includes('--cross-screen-drag-test');
+const isAcceptanceTest = process.argv.includes('--acceptance-test');
+const isAutomatedTest = isSmokeTest || isBackgroundRemovalTest || isMotionTest || is3dTest || is3dModelTest || isUiTest || isPerformanceTest || isClickThroughTest || isDirectDragTest || isCrossScreenTest || isCrossScreenDragTest || isAcceptanceTest;
 const automatedSessionDirectory = isAutomatedTest ? path.join(os.tmpdir(), `quick-pet-test-session-${process.pid}`) : '';
 if (automatedSessionDirectory) app.setPath('sessionData', automatedSessionDirectory);
 if (is3dModelTest) app.setPath('userData', path.join(process.cwd(), 'tests', '.quick-pet-model-test-data'));
@@ -46,6 +49,9 @@ if (isUiTest) app.setPath('userData', path.join(process.cwd(), 'tests', '.quick-
 if (isPerformanceTest) app.setPath('userData', path.join(process.cwd(), 'tests', '.quick-pet-performance-test-data'));
 if (isClickThroughTest) app.setPath('userData', path.join(process.cwd(), 'tests', '.quick-pet-click-through-test-data'));
 if (isDirectDragTest) app.setPath('userData', path.join(process.cwd(), 'tests', '.quick-pet-direct-drag-test-data'));
+if (isCrossScreenTest) app.setPath('userData', path.join(process.cwd(), 'tests', '.quick-pet-cross-screen-test-data'));
+if (isCrossScreenDragTest) app.setPath('userData', path.join(process.cwd(), 'tests', '.quick-pet-cross-screen-drag-test-data'));
+if (isAcceptanceTest) app.setPath('userData', path.join(process.cwd(), 'tests', '.quick-pet-acceptance-test-data'));
 if (isSmokeTest) app.setPath('userData', path.join(process.cwd(), 'tests', '.quick-pet-smoke-test-data'));
 if (isMotionTest) app.setPath('userData', path.join(process.cwd(), 'tests', '.quick-pet-motion-test-data'));
 if (is3dTest) app.setPath('userData', path.join(process.cwd(), 'tests', '.quick-pet-3d-test-data'));
@@ -75,6 +81,7 @@ const companionControllers = new Map();
 const pendingModelPreviews = new Map();
 const petClickThroughStates = new WeakMap();
 const petDragStates = new WeakMap();
+const crossScreenDragDiagnostics = [];
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'quickpet-model', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
@@ -89,12 +96,23 @@ let pendingPanelNavigation = '';
 
 function exitAutomatedTest(code) {
   motionController?.stop();
+  startupRecovery?.markClean();
   try { petWindow?.destroy(); } catch {}
   try { panelWindow?.destroy(); } catch {}
   try { searchWindow?.destroy(); } catch {}
   try { fs.rmSync(automatedSessionDirectory, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 }); } catch {}
   app.exit(code);
   setTimeout(() => process.exit(code), 250);
+}
+
+function whenPetShown(callback) {
+  if (petWindow?.isVisible()) setImmediate(callback);
+  else petWindow?.once('show', callback);
+}
+
+function whenWebContentsLoaded(webContents, callback) {
+  if (webContents.getURL() && !webContents.isLoadingMainFrame()) setImmediate(callback);
+  else webContents.once('did-finish-load', callback);
 }
 
 function assetPath(name) {
@@ -141,7 +159,7 @@ function resizePetWindow(settings) {
     width: size.width,
     height: size.height
   }, false);
-  motionController?.syncToWindow();
+  motionController?.syncToWindow(size);
 }
 
 function placePetAtBottomRight() {
@@ -150,7 +168,7 @@ function placePetAtBottomRight() {
   const { width, height } = petWindow.getBounds();
   const { x, y, width: areaWidth, height: areaHeight } = display.workArea;
   petWindow.setPosition(x + areaWidth - width - 18, y + areaHeight - height - 12, false);
-  motionController?.syncToWindow();
+  motionController?.syncToWindow(petBoundsForScale(store.data.settings.petScale, store.data.settings.petRenderMode));
 }
 
 function createPetWindow() {
@@ -560,6 +578,7 @@ function syncCompanionWindows() {
       const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
       window.setPosition(display.workArea.x + display.workArea.width - size.width - 18 - offset * 90, display.workArea.y + display.workArea.height - size.height - 12, false);
       window.showInactive();
+      controller.syncToWindow(size);
       offset += 1;
     });
     window.on('closed', () => {
@@ -810,14 +829,18 @@ function registerIpc() {
   ipcMain.on('pet:set-click-through', (event, ignore) => {
     const senderWindow = petWindowFromSender(event.sender);
     if (!senderWindow || senderWindow.isDestroyed()) return;
-    senderWindow.setIgnoreMouseEvents(Boolean(ignore), ignore ? { forward: true } : undefined);
-    petClickThroughStates.set(senderWindow, Boolean(ignore));
+    const shouldIgnore = isCrossScreenDragTest ? false : Boolean(ignore);
+    senderWindow.setIgnoreMouseEvents(shouldIgnore, shouldIgnore ? { forward: true } : undefined);
+    petClickThroughStates.set(senderWindow, shouldIgnore);
   });
   ipcMain.on('pet:drag-begin', (event, x, y) => {
     const senderWindow = petWindowFromSender(event.sender);
     if (!senderWindow || senderWindow.isDestroyed()) return;
     endPetWindowDrag(senderWindow);
-    const cursor = Number.isFinite(x) && Number.isFinite(y) ? { x, y } : screen.getCursorScreenPoint();
+    const cursor = isDirectDragTest && Number.isFinite(x) && Number.isFinite(y)
+      ? { x, y }
+      : screen.getCursorScreenPoint();
+    if (isCrossScreenDragTest) crossScreenDragDiagnostics.push({ phase: 'begin', supplied: { x, y }, cursor: screen.getCursorScreenPoint() });
     petDragStates.set(senderWindow, {
       active: false,
       originCursor: cursor,
@@ -833,15 +856,20 @@ function registerIpc() {
   ipcMain.on('pet:drag-move', (event, x, y) => {
     const senderWindow = petWindowFromSender(event.sender);
     const drag = senderWindow ? petDragStates.get(senderWindow) : null;
-    if (!senderWindow || !drag?.active || senderWindow.isDestroyed() || !Number.isFinite(x) || !Number.isFinite(y)) return;
-    senderWindow.setPosition(
-      Math.round(drag.originBounds.x + x - drag.originCursor.x),
-      Math.round(drag.originBounds.y + y - drag.originCursor.y),
-      false
-    );
+    if (!senderWindow || !drag?.active || senderWindow.isDestroyed()) return;
+    const cursor = isDirectDragTest && Number.isFinite(x) && Number.isFinite(y)
+      ? { x, y }
+      : screen.getCursorScreenPoint();
+    if (isCrossScreenDragTest) crossScreenDragDiagnostics.push({ phase: 'move', supplied: { x, y }, cursor });
+    const nextX = drag.originBounds.x + cursor.x - drag.originCursor.x;
+    const nextY = drag.originBounds.y + cursor.y - drag.originCursor.y;
+    const controller = motionControllerForPetWindow(senderWindow);
+    if (controller) controller.moveTo(nextX, nextY);
+    else senderWindow.setBounds({ x: Math.round(nextX), y: Math.round(nextY), width: drag.originBounds.width, height: drag.originBounds.height }, false);
   });
   ipcMain.on('pet:drag-end', (event) => {
     const senderWindow = petWindowFromSender(event.sender);
+    if (isCrossScreenDragTest) crossScreenDragDiagnostics.push({ phase: 'end', cursor: screen.getCursorScreenPoint() });
     if (senderWindow) endPetWindowDrag(senderWindow);
   });
   ipcMain.handle('panel:toggle', (_event, force) => {
@@ -980,11 +1008,13 @@ function registerIpc() {
     const previousPanelHeight = store.data.settings.panelHeight;
     const previousSearchShortcut = store.data.settings.globalSearchShortcut;
     const settings = store.updateSettings(changes || {});
-    app.setLoginItemSettings({
-      openAtLogin: settings.launchAtLogin,
-      path: loginLaunchTarget(process.env, app.getPath('exe')),
-      args: app.isPackaged ? [] : [app.getAppPath()]
-    });
+    if (Object.hasOwn(changes || {}, 'launchAtLogin')) {
+      app.setLoginItemSettings({
+        openAtLogin: settings.launchAtLogin,
+        path: loginLaunchTarget(process.env, app.getPath('exe')),
+        args: app.isPackaged ? [] : [app.getAppPath()]
+      });
+    }
     petWindow?.setAlwaysOnTop(settings.petAlwaysOnTop, 'floating');
     if (changes?.hideOnFullscreen === false && hiddenByFullscreen) {
       hiddenByFullscreen = false;
@@ -1359,7 +1389,7 @@ if (!gotLock) {
     }
     registerIpc();
     createPetWindow();
-    if (isSmokeTest || isUiTest) createPanelWindow();
+    if (isSmokeTest || isUiTest || isAcceptanceTest) createPanelWindow();
     motionController = new PetMotionController({
       getWindow: () => petWindow,
       getSettings: () => ({ ...store.data.settings, petStatus: store.data.petStatus }),
@@ -1411,7 +1441,7 @@ if (!gotLock) {
     }
     if (isMotionTest) {
       store.updateSettings({ autoWalk: true, petWalkSpeed: 110, naturalBehavior: false, nightSleep: false });
-      petWindow.once('show', () => {
+      whenPetShown(() => {
         const startingX = petWindow.getBounds().x;
         setTimeout(() => {
           const endingX = petWindow?.getBounds().x ?? startingX;
@@ -1422,7 +1452,7 @@ if (!gotLock) {
       });
     }
     if (is3dTest || is3dModelTest) {
-      petWindow.once('show', () => {
+      whenPetShown(() => {
         setTimeout(async () => {
           try {
             motionController.stop();
@@ -1453,12 +1483,12 @@ if (!gotLock) {
         loadedWindows += 1;
         if (loadedWindows === 2) setTimeout(() => exitAutomatedTest(0), 300);
       };
-      petWindow.webContents.once('did-finish-load', markLoaded);
-      panelWindow.webContents.once('did-finish-load', markLoaded);
+      whenWebContentsLoaded(petWindow.webContents, markLoaded);
+      whenWebContentsLoaded(panelWindow.webContents, markLoaded);
       setTimeout(() => exitAutomatedTest(2), 12000);
     }
     if (isUiTest) {
-      panelWindow.webContents.once('did-finish-load', () => {
+      whenWebContentsLoaded(panelWindow.webContents, () => {
         navigatePanel('settings');
         setTimeout(async () => {
           try {
@@ -1497,7 +1527,7 @@ if (!gotLock) {
       setTimeout(() => exitAutomatedTest(7), 12000);
     }
     if (isPerformanceTest) {
-      petWindow.once('show', () => {
+      whenPetShown(() => {
         const samples = [];
         setTimeout(() => {
           const timer = setInterval(async () => {
@@ -1519,7 +1549,7 @@ if (!gotLock) {
       setTimeout(() => exitAutomatedTest(8), 15000);
     }
     if (isClickThroughTest) {
-      petWindow.once('show', () => {
+      whenPetShown(() => {
         setTimeout(async () => {
           try {
             motionController.stop();
@@ -1543,7 +1573,7 @@ if (!gotLock) {
       setTimeout(() => exitAutomatedTest(9), 8000);
     }
     if (isDirectDragTest) {
-      petWindow.once('show', () => {
+      whenPetShown(() => {
         setTimeout(async () => {
           try {
             motionController.stop();
@@ -1562,6 +1592,196 @@ if (!gotLock) {
         }, 700);
       });
       setTimeout(() => exitAutomatedTest(10), 8000);
+    }
+    if (isCrossScreenTest) {
+      whenPetShown(() => {
+        setTimeout(async () => {
+          try {
+            motionController.stop();
+            const displays = screen.getAllDisplays().sort((a, b) => a.workArea.x - b.workArea.x);
+            console.log(`cross-screen-test displays=${JSON.stringify(displays.map(({ id, scaleFactor, bounds, workArea }) => ({ id, scaleFactor, bounds, workArea })))}`);
+            if (displays.length < 2) {
+              console.log('cross-screen-test skipped=single-display');
+              exitAutomatedTest(0);
+              return;
+            }
+            const bounds = petWindow.getBounds();
+            const left = Math.min(...displays.map((display) => display.workArea.x));
+            const right = Math.max(...displays.map((display) => display.workArea.x + display.workArea.width)) - bounds.width;
+            const samples = 80;
+            for (let index = 0; index <= samples; index += 1) {
+              const x = Math.round(left + (right - left) * index / samples);
+              const matching = screen.getDisplayMatching({ x, y: bounds.y, width: bounds.width, height: bounds.height });
+              petWindow.setPosition(x, bounds.y, false);
+              const actual = petWindow.getBounds();
+              if (index % 10 === 0) console.log(`cross-screen-sample requested=${x},${bounds.y} actual=${actual.x},${actual.y} display=${matching.id}`);
+              await new Promise((resolve) => setTimeout(resolve, 12));
+            }
+            const positionOnlyFinal = petWindow.getBounds();
+            for (let index = samples; index >= 0; index -= 1) {
+              const x = Math.round(left + (right - left) * index / samples);
+              petWindow.setBounds({ x, y: bounds.y, width: bounds.width, height: bounds.height }, false);
+              await new Promise((resolve) => setTimeout(resolve, 12));
+            }
+            console.log(`cross-screen-test positionOnlyFinal=${JSON.stringify(positionOnlyFinal)} fixedBoundsFinal=${JSON.stringify(petWindow.getBounds())}`);
+            exitAutomatedTest(0);
+          } catch (error) {
+            console.error(`cross-screen-test-error ${error.stack || error.message}`);
+            exitAutomatedTest(11);
+          }
+        }, 700);
+      });
+      setTimeout(() => exitAutomatedTest(11), 12000);
+    }
+    if (isCrossScreenDragTest) {
+      whenPetShown(() => {
+        motionController.stop();
+        petWindow.setIgnoreMouseEvents(false);
+        const startingBounds = petWindow.getBounds();
+        console.log(`cross-screen-drag-ready bounds=${JSON.stringify(startingBounds)}`);
+        const finish = () => {
+          const moves = crossScreenDragDiagnostics.filter((entry) => entry.phase === 'move');
+          const begin = crossScreenDragDiagnostics.find((entry) => entry.phase === 'begin');
+          const end = crossScreenDragDiagnostics.find((entry) => entry.phase === 'end');
+          const finalBounds = petWindow.getBounds();
+          const maximumDelta = moves.reduce((maximum, entry) => Math.max(maximum, Math.abs(entry.supplied.x - entry.cursor.x), Math.abs(entry.supplied.y - entry.cursor.y)), 0);
+          const expected = begin && end ? {
+            x: Math.round(startingBounds.x + end.cursor.x - begin.cursor.x),
+            y: Math.round(startingBounds.y + end.cursor.y - begin.cursor.y)
+          } : null;
+          const passed = Boolean(expected)
+            && Math.abs(finalBounds.x - expected.x) <= 3
+            && Math.abs(finalBounds.y - expected.y) <= 3
+            && Math.abs(finalBounds.width - startingBounds.width) <= 3
+            && Math.abs(finalBounds.height - startingBounds.height) <= 3;
+          console.log(`cross-screen-drag-test events=${crossScreenDragDiagnostics.length} maximumCoordinateDelta=${maximumDelta} expected=${JSON.stringify(expected)} final=${JSON.stringify(finalBounds)} passed=${passed}`);
+          console.log(`cross-screen-drag-diagnostics=${JSON.stringify(crossScreenDragDiagnostics.filter((_entry, index) => index % Math.max(1, Math.floor(crossScreenDragDiagnostics.length / 12)) === 0))}`);
+          exitAutomatedTest(passed ? 0 : 12);
+        };
+        const diagnosticTimer = setInterval(() => {
+          if (!crossScreenDragDiagnostics.some((entry) => entry.phase === 'end')) return;
+          clearInterval(diagnosticTimer);
+          finish();
+        }, 200);
+        setTimeout(() => {
+          clearInterval(diagnosticTimer);
+          finish();
+        }, 30000);
+      });
+      setTimeout(() => exitAutomatedTest(12), 35000);
+    }
+    if (isAcceptanceTest) {
+      whenWebContentsLoaded(panelWindow.webContents, () => {
+        setTimeout(async () => {
+          try {
+            const fixturePath = path.join(process.cwd(), 'package.json');
+            const result = await panelWindow.webContents.executeJavaScript(`(async () => {
+              const api = window.quickPet;
+              const assert = (condition, label) => { if (!condition) throw new Error('acceptance failed: ' + label); };
+              const passed = [];
+              const mark = (label) => passed.push(label);
+              let state = await api.getState();
+              assert(Array.isArray(state.categories) && Array.isArray(state.shortcuts), 'state'); mark('state');
+
+              for (const item of state.shortcuts.filter((entry) => entry.target === ${JSON.stringify(fixturePath)})) await api.removeShortcut(item.id);
+              for (const item of state.categories.filter((entry) => entry.name.startsWith('Acceptance'))) await api.removeCategory(item.id);
+              const category = await api.addCategory({ name: 'Acceptance', icon: 'A', color: '#333333' });
+              await api.updateCategory(category.id, { name: 'Acceptance Updated' });
+              await api.moveCategory(category.id, -1); mark('categories');
+
+              const localResult = await api.addPaths([${JSON.stringify(fixturePath)}]);
+              assert(localResult.added.length === 1 && localResult.errors.length === 0, 'add local path');
+              const local = localResult.added[0];
+              await api.refreshShortcutIcon(local.id);
+              await api.clearShortcutIcon(local.id);
+              const url = await api.addShortcut({ name: 'Acceptance URL', target: 'https://acceptance.example/test', category: category.id });
+              await api.updateShortcut(url.id, { favorite: true, tags: ['acceptance'], hotkey: 'Control+Alt+Shift+F11' });
+              await api.reorderShortcut(url.id, local.id, category.id);
+              await api.removeShortcut(url.id);
+              const checked = await api.checkAll();
+              assert(checked.some((entry) => entry.id === local.id && entry.status === 'ok'), 'availability check');
+              await api.resetUsage(); mark('shortcuts');
+
+              const imported = await api.importScannedShortcuts([{ name: 'Scanned Acceptance', target: 'https://scan.acceptance.example', type: 'website', category: category.id }]);
+              assert(imported.added.length === 1, 'scan import');
+              await api.removeShortcut(imported.added[0].id); mark('scan import');
+              const scanCounts = {};
+              for (const kind of ['desktop', 'start-menu', 'bookmarks']) {
+                const candidates = await api.scanShortcuts(kind);
+                assert(Array.isArray(candidates) && candidates.length <= 1500, 'scan ' + kind);
+                scanCounts[kind] = candidates.length;
+              }
+              mark('system scans ' + JSON.stringify(scanCounts));
+
+              const settings = await api.updateSettings({ theme: 'dark', panelOpacity: 0.95, petScreenMode: 'all' });
+              assert(settings.theme === 'dark' && settings.petScreenMode === 'all', 'settings');
+              await api.updateSettings({ theme: 'system', panelOpacity: 0.98, petScreenMode: 'current' }); mark('settings');
+
+              const status = await api.updatePetStatus({ name: 'Acceptance Pet' });
+              assert(status.name === 'Acceptance Pet', 'pet status');
+              await api.interactWithPet('feed');
+              await api.interactWithPet('play'); mark('pet interaction');
+
+              const rule = await api.addRule({ name: 'Acceptance Rule', field: 'name', operator: 'contains', value: 'acceptance', category: category.id, tags: ['tested'] });
+              await api.updateRule(rule.id, { enabled: false });
+              await api.removeRule(rule.id); mark('rules');
+
+              const reminder = await api.addReminder({ title: 'Acceptance Reminder', dueAt: Date.now() + 3600000, repeat: 'daily' });
+              await api.updateReminder(reminder.id, { completedAt: Date.now() });
+              await api.removeReminder(reminder.id); mark('reminders');
+
+              const folder = await api.addWatchedFolder({ path: ${JSON.stringify(process.cwd())}, category: category.id, tags: ['acceptance'] });
+              await api.updateWatchedFolder(folder.id, { enabled: false });
+              await api.removeWatchedFolder(folder.id); mark('watched folders');
+
+              const companion = await api.addCompanion({ name: 'Acceptance Companion', renderMode: '3d', personality: 'lively', enabled: true });
+              await api.updateCompanion(companion.id, { enabled: false, scale: 0.8 });
+              await api.removeCompanion(companion.id); mark('companions');
+
+              const clipboardItem = await api.acceptClipboardCandidate({ target: 'https://clipboard.acceptance.example', type: 'website' });
+              await api.dismissClipboardCandidate('https://dismiss.acceptance.example');
+              await api.removeShortcut(clipboardItem.id); mark('clipboard');
+
+              const bytes = await api.getPetModel('');
+              assert(bytes && bytes.byteLength > 1000, 'built-in model bytes');
+              await api.resetPetModel(); mark('model access');
+
+              const backup = await api.createBackup();
+              const backups = await api.listBackups();
+              assert(backups.some((entry) => entry.id === backup.id), 'backup list');
+              await api.removeBackup(backup.id); mark('backups');
+
+              const storage = await api.getStorageReport();
+              assert(Number.isFinite(storage.userDataBytes) && Number.isFinite(storage.portableCacheBytes), 'storage report');
+              await api.clearRuntimeCache(); mark('maintenance');
+
+              const update = await api.checkForUpdates('');
+              assert(['current', 'available', 'unconfigured'].includes(update.status), 'update check'); mark('updates');
+
+              await api.executeCommand('toggle-walk');
+              await api.executeCommand('open-settings');
+              await api.executeCommand('open-automation');
+              await api.toggleSearch(true);
+              await api.hideSearch();
+              await api.togglePanel(false);
+              await api.togglePanel(true); mark('commands and windows');
+
+              await api.markNotificationsRead();
+              await api.clearNotifications(); mark('notifications');
+
+              await api.removeShortcut(local.id);
+              await api.removeCategory(category.id); mark('cleanup');
+              return passed;
+            })()`);
+            console.log(`acceptance-test passed=${result.length} features=${result.join(',')}`);
+            exitAutomatedTest(0);
+          } catch (error) {
+            console.error(error.stack || error.message);
+            exitAutomatedTest(13);
+          }
+        }, 900);
+      });
+      setTimeout(() => exitAutomatedTest(13), 60000);
     }
   });
 }
