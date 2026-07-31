@@ -1,0 +1,111 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to publish, for example v0.12.2
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build and publish Windows portable release
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Resolve release tag
+        id: release
+        shell: pwsh
+        run: |
+          $tag = if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            "${{ inputs.tag }}"
+          } else {
+            "${{ github.ref_name }}"
+          }
+          if ($tag -notmatch '^v\d+\.\d+\.\d+$') {
+            throw "Release tag must use vMAJOR.MINOR.PATCH: $tag"
+          }
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Check out release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.tag }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build portable executable
+        run: npm run build
+
+      - name: Prepare release files and notes
+        id: files
+        shell: pwsh
+        run: |
+          $package = Get-Content -Raw -Encoding UTF8 package.json | ConvertFrom-Json
+          $tag = "${{ steps.release.outputs.tag }}"
+          if ($tag -ne "v$($package.version)") {
+            throw "Tag $tag does not match package version v$($package.version)."
+          }
+
+          $assetName = "QuickPet-Portable-$($package.version)-x64.exe"
+          $assetPath = Join-Path $PWD "dist\$assetName"
+          if (-not (Test-Path -LiteralPath $assetPath)) {
+            throw "Portable build was not produced: $assetPath"
+          }
+
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $assetPath).Hash
+          $checksumPath = "$assetPath.sha256.txt"
+          Set-Content -LiteralPath $checksumPath -Encoding ASCII -Value "$hash  $assetName"
+
+          $sourceNotes = Join-Path $PWD ".github\release-notes\$tag.md"
+          $releaseNotes = Join-Path $env:RUNNER_TEMP "release-notes-$tag.md"
+          if (Test-Path -LiteralPath $sourceNotes) {
+            Copy-Item -LiteralPath $sourceNotes -Destination $releaseNotes
+          } else {
+            Set-Content -LiteralPath $releaseNotes -Encoding UTF8 -Value "本版本已通过自动测试并生成 Windows x64 便携版。"
+          }
+          Add-Content -LiteralPath $releaseNotes -Encoding UTF8 -Value "`n## 文件校验`n`n``````text`n$hash  $assetName`n``````"
+
+          "asset=$assetPath" >> $env:GITHUB_OUTPUT
+          "checksum=$checksumPath" >> $env:GITHUB_OUTPUT
+          "notes=$releaseNotes" >> $env:GITHUB_OUTPUT
+          "title=快捷宠 $($package.version)" >> $env:GITHUB_OUTPUT
+
+      - name: Create or update GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ steps.release.outputs.tag }}"
+          gh release view $tag --repo "${{ github.repository }}" *> $null
+          $releaseExists = $LASTEXITCODE -eq 0
+
+          if ($releaseExists) {
+            gh release edit $tag --repo "${{ github.repository }}" --title "${{ steps.files.outputs.title }}" --notes-file "${{ steps.files.outputs.notes }}" --latest
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            gh release upload $tag "${{ steps.files.outputs.asset }}" "${{ steps.files.outputs.checksum }}" --repo "${{ github.repository }}" --clobber
+          } else {
+            gh release create $tag "${{ steps.files.outputs.asset }}" "${{ steps.files.outputs.checksum }}" --repo "${{ github.repository }}" --verify-tag --title "${{ steps.files.outputs.title }}" --notes-file "${{ steps.files.outputs.notes }}" --latest
+          }
