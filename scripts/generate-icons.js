@@ -70,21 +70,38 @@ function polygon(points, color) {
 }
 
 function render() {
-  roundedRect(8, 8, 240, 240, 61, [145, 131, 255, 255], [99, 82, 215, 255]);
-  ellipse(128, 145, 79, 77, [255, 243, 220, 255]);
-  polygon([[57, 113], [50, 50], [103, 82]], [255, 243, 220, 255]);
-  polygon([[199, 113], [206, 50], [153, 82]], [255, 243, 220, 255]);
-  polygon([[60, 83], [57, 62], [82, 77]], [244, 166, 162, 220]);
-  polygon([[196, 83], [199, 62], [174, 77]], [244, 166, 162, 220]);
-  ellipse(122, 93, 57, 31, [220, 133, 80, 255]);
-  ellipse(82, 110, 30, 27, [220, 133, 80, 255]);
-  ellipse(94, 143, 14, 18, [78, 59, 79, 255]);
-  ellipse(162, 143, 14, 18, [78, 59, 79, 255]);
-  ellipse(90, 137, 4, 5, [255, 255, 255, 255]);
-  ellipse(158, 137, 4, 5, [255, 255, 255, 255]);
-  polygon([[119, 164], [128, 171], [137, 164], [128, 160]], [221, 125, 124, 255]);
-  ellipse(128, 197, 23, 23, [117, 102, 237, 255]);
-  polygon([[128, 180], [133, 192], [145, 197], [133, 202], [128, 214], [123, 202], [111, 197], [123, 192]], [255, 255, 255, 255]);
+  const ink = [17, 17, 17, 255];
+  const paper = [244, 244, 239, 255];
+  roundedRect(8, 8, 240, 240, 61, ink);
+  polygon([[69, 87], [62, 43], [105, 71]], paper);
+  polygon([[187, 87], [194, 43], [151, 71]], paper);
+  ellipse(128, 132, 82, 82, paper);
+
+  for (let y = 50 * SCALE; y <= 214 * SCALE; y += 1) {
+    for (let x = 46 * SCALE; x <= 210 * SCALE; x += 1) {
+      const logicalX = x / SCALE;
+      const logicalY = y / SCALE;
+      const insideOuter = (logicalX - 128) ** 2 + (logicalY - 132) ** 2 <= 82 ** 2;
+      if (!insideOuter) continue;
+      let black = logicalX >= 128;
+      if ((logicalX - 128) ** 2 + (logicalY - 91) ** 2 <= 41 ** 2) black = true;
+      if ((logicalX - 128) ** 2 + (logicalY - 173) ** 2 <= 41 ** 2) black = false;
+      if (black) blendPixel(x, y, ink);
+    }
+  }
+
+  ellipse(128, 91, 14, 14, paper);
+  ellipse(128, 173, 14, 14, ink);
+
+  const rim = [215, 215, 208, 255];
+  for (let y = 48 * SCALE; y <= 216 * SCALE; y += 1) {
+    for (let x = 44 * SCALE; x <= 212 * SCALE; x += 1) {
+      const logicalX = x / SCALE;
+      const logicalY = y / SCALE;
+      const distanceSquared = (logicalX - 128) ** 2 + (logicalY - 132) ** 2;
+      if (distanceSquared >= 80 ** 2 && distanceSquared <= 82 ** 2) blendPixel(x, y, rim);
+    }
+  }
 }
 
 function downsample() {

@@ -5,6 +5,7 @@ release/
 .DS_Store
 Thumbs.db
 .cache/
+.electron-cache/
 .electron-builder-cache/
 .playwright-cli/
 output/

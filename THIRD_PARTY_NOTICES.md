@@ -17,9 +17,9 @@
 
 | 组件 | 当前安装版本 | 许可证 | 项目地址 |
 | --- | --- | --- | --- |
-| Electron | `37.10.3` | MIT | <https://github.com/electron/electron> |
+| Electron | `43.2.0` | MIT | <https://github.com/electron/electron> |
 | esbuild | `0.25.8` | MIT | <https://github.com/evanw/esbuild> |
-| electron-builder | `26.15.3` | MIT | <https://github.com/electron-userland/electron-builder> |
+| electron-builder | `26.15.7` | MIT | <https://github.com/electron-userland/electron-builder> |
 
 依赖的完整许可证文本可在对应软件包、源代码仓库及发布包中查看。
 

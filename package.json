@@ -1,6 +1,6 @@
 {
   "name": "quick-pet",
-  "version": "0.11.19",
+  "version": "0.11.20",
   "description": "可自定义的 Windows 桌宠快捷收纳器",
   "main": "src/main/main.js",
   "author": "Quick Pet",
@@ -13,26 +13,30 @@
   "bugs": {
     "url": "https://github.com/YunsuStudio/QuickPet/issues"
   },
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
     "test": "node --test",
     "icons": "node scripts/generate-icons.js",
+    "ensure:electron": "node node_modules/electron/install.js",
     "bundle:3d": "esbuild src/renderer/pet-3d-entry.js --bundle --format=iife --global-name=QuickPet3DBundle --outfile=src/renderer/vendor/pet-3d.bundle.js --minify",
     "bundle:live2d": "node scripts/copy-live2d-runtime.js && esbuild src/renderer/pet-live2d-entry.js --bundle --format=iife --global-name=QuickPetLive2DBundle --outfile=src/renderer/vendor/pet-live2d.bundle.js --minify",
     "bundle:renderers": "npm run bundle:3d && npm run bundle:live2d",
-    "pack": "npm run bundle:renderers && electron-builder --dir && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-packaged-launch.ps1",
+    "pack": "npm run ensure:electron && npm run bundle:renderers && electron-builder --dir && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-packaged-launch.ps1",
     "build:portable": "npm run pack && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-portable-launcher.ps1",
     "build": "npm run build:portable"
   },
   "devDependencies": {
     "@hazart-pkg/live2d-core": "^1.0.1",
-    "electron": "^37.2.0",
+    "electron": "^43.2.0",
     "electron-builder": "^26.0.12",
     "esbuild": "^0.25.8",
     "pixi.js": "^8.13.1",
-    "untitled-pixi-live2d-engine": "^1.3.5",
-    "three": "^0.179.1"
+    "three": "^0.179.1",
+    "untitled-pixi-live2d-engine": "^1.3.5"
   },
   "build": {
     "appId": "com.quickpet.launcher",

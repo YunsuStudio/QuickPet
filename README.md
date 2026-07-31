@@ -8,9 +8,10 @@
 
 <p>
   <img alt="Windows 10 和 11 x64" src="https://img.shields.io/badge/Windows-10%20%7C%2011%20x64-111111?style=flat-square&logo=windows&logoColor=white">
-  <img alt="版本 0.11.19" src="https://img.shields.io/badge/version-0.11.19-111111?style=flat-square">
+  <img alt="版本 0.11.20" src="https://img.shields.io/badge/version-0.11.20-111111?style=flat-square">
   <img alt="89 项测试通过" src="https://img.shields.io/badge/tests-89%20passed-111111?style=flat-square">
   <img alt="MIT 许可" src="https://img.shields.io/badge/license-MIT-111111?style=flat-square">
+  <a href="https://github.com/YunsuStudio/QuickPet/actions/workflows/ci.yml"><img alt="CI 状态" src="https://github.com/YunsuStudio/QuickPet/actions/workflows/ci.yml/badge.svg"></a>
 </p>
 
 [下载便携版](../../releases/latest) · [使用说明](./使用说明.md) · [项目说明](./项目说明.md) · [报告问题](../../issues)
@@ -28,7 +29,7 @@
 | 项目 | 说明 |
 | --- | --- |
 | 支持系统 | Windows 10 / 11 x64 |
-| 当前文件 | `QuickPet-Portable-0.11.19-x64.exe` |
+| 当前文件 | `QuickPet-Portable-0.11.20-x64.exe` |
 | 安装方式 | 无需安装，不自动创建快捷方式 |
 | 首次运行 | 在 EXE 同目录创建 `QuickPet-Portable-Cache` |
 | 数据位置 | 默认保存在本机，可备份和完整迁移 |
@@ -95,7 +96,7 @@
 
 ## 开发
 
-需要 Node.js 20 或更高版本。
+需要 Node.js 22.12 或更高版本。
 
 ```powershell
 npm install
@@ -114,7 +115,7 @@ npm test
 npm run build
 ```
 
-构建产物位于 `dist/QuickPet-Portable-0.11.19-x64.exe`。项目不会生成 NSIS、IExpress 或其他安装包。
+构建产物位于 `dist/QuickPet-Portable-0.11.20-x64.exe`。项目不会生成 NSIS、IExpress 或其他安装包。
 
 ## 测试状态
 
