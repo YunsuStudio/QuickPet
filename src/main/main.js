@@ -20,11 +20,12 @@ const { ReminderScheduler } = require('./reminder-scheduler');
 const { centeredBounds } = require('./window-layout');
 const { BackupManager } = require('./backup-manager');
 const { ShortcutHotkeyRegistry } = require('./shortcut-hotkeys');
+const { createLaunchPlan, launchTarget } = require('./shortcut-launcher');
 const { StartupRecovery } = require('./startup-recovery');
 const { MaintenanceManager, isPathInside } = require('./maintenance-manager');
 const { MigrationManager } = require('./migration-manager');
 const { UpdateManager } = require('./update-manager');
-const { inferType, isUrl } = require('../shared/classifier');
+const { inferType, isProtocolTarget, isUrl, isWebUrl } = require('../shared/classifier');
 const { COMMANDS } = require('../shared/commands');
 
 const APP_NAME = '快捷宠';
@@ -93,6 +94,8 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'quickpet-preview', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }
 ]);
 let registeredSearchShortcut = '';
+let registeredLauncherShortcut = '';
+let searchWindowMode = 'search';
 let snapTimer;
 let hiddenByFullscreen = false;
 let isQuitting = false;
@@ -257,8 +260,9 @@ function createPanelWindow(showWhenReady = false) {
   return panelWindow;
 }
 
-function showSearchWindow() {
+function showSearchWindow(mode = searchWindowMode) {
   if (!searchWindow || searchWindow.isDestroyed()) return;
+  searchWindowMode = mode === 'launcher' ? 'launcher' : 'search';
   const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
   const bounds = searchWindow.getBounds();
   searchWindow.setPosition(
@@ -268,14 +272,15 @@ function showSearchWindow() {
   );
   searchWindow.show();
   searchWindow.focus();
-  searchWindow.webContents.send('search:focus');
+  searchWindow.webContents.send('search:focus', searchWindowMode);
 }
 
-function createSearchWindow(showWhenReady = false) {
+function createSearchWindow(showWhenReady = false, mode = 'search') {
   if (searchWindow && !searchWindow.isDestroyed()) return searchWindow;
+  searchWindowMode = mode === 'launcher' ? 'launcher' : 'search';
   searchWindow = new BrowserWindow({
-    width: 640,
-    height: 390,
+    width: 680,
+    height: 460,
     show: false,
     frame: false,
     transparent: true,
@@ -293,40 +298,40 @@ function createSearchWindow(showWhenReady = false) {
   });
   secureWindowNavigation(searchWindow);
   searchWindow.loadFile(path.join(__dirname, '..', 'renderer', 'search.html'));
-  if (showWhenReady) searchWindow.once('ready-to-show', showSearchWindow);
+  if (showWhenReady) searchWindow.once('ready-to-show', () => showSearchWindow(searchWindowMode));
   searchWindow.on('blur', () => searchWindow?.hide());
   searchWindow.on('closed', () => { searchWindow = null; });
   return searchWindow;
 }
 
-function toggleSearch(force) {
+function toggleSearch(force, mode = 'search') {
   const shouldShow = typeof force === 'boolean' ? force : !searchWindow?.isVisible();
   if (!shouldShow) return searchWindow?.hide();
   if (!searchWindow || searchWindow.isDestroyed()) {
-    createSearchWindow(true);
+    createSearchWindow(true, mode);
     return;
   }
-  showSearchWindow();
+  showSearchWindow(mode);
 }
 
 function registerSearchShortcut(preferred = 'Alt+Space') {
   if (registeredSearchShortcut) globalShortcut.unregister(registeredSearchShortcut);
+  if (registeredLauncherShortcut) globalShortcut.unregister(registeredLauncherShortcut);
   registeredSearchShortcut = '';
-  const candidates = [...new Set([preferred, 'Alt+Space', 'CommandOrControl+Alt+Space'])];
-  for (const accelerator of candidates) {
-    if (globalShortcut.register(accelerator, () => toggleSearch())) {
-      registeredSearchShortcut = accelerator;
-      break;
-    }
-  }
-  if (registeredSearchShortcut && store.data.settings.globalSearchShortcut !== registeredSearchShortcut) {
-    store.updateSettings({ globalSearchShortcut: registeredSearchShortcut });
-  }
-  return registeredSearchShortcut;
+  registeredLauncherShortcut = '';
+  const searchAccelerator = preferred || store.data.settings.globalSearchShortcut;
+  const launcherAccelerator = store.data.settings.quickLaunchShortcut;
+  try {
+    if (searchAccelerator && globalShortcut.register(searchAccelerator, () => toggleSearch(undefined, 'search'))) registeredSearchShortcut = searchAccelerator;
+  } catch {}
+  try {
+    if (launcherAccelerator && launcherAccelerator !== searchAccelerator && globalShortcut.register(launcherAccelerator, () => toggleSearch(undefined, 'launcher'))) registeredLauncherShortcut = launcherAccelerator;
+  } catch {}
+  return { search: registeredSearchShortcut, launcher: registeredLauncherShortcut };
 }
 
 function syncShortcutHotkeys() {
-  return shortcutHotkeyRegistry?.sync(store.data.shortcuts, [registeredSearchShortcut]) || {};
+  return shortcutHotkeyRegistry?.sync(store.data.shortcuts, [store.data.settings.globalSearchShortcut, store.data.settings.quickLaunchShortcut]) || {};
 }
 
 function positionPanel() {
@@ -366,6 +371,10 @@ function applicationState(scope = 'panel') {
     runtime: {
       safeMode,
       portable: process.env.QUICKPET_PORTABLE === '1',
+      globalShortcutRegistrations: {
+        search: registeredSearchShortcut === store.data.settings.globalSearchShortcut,
+        launcher: registeredLauncherShortcut === store.data.settings.quickLaunchShortcut
+      },
       update: updateManager?.lastResult || { status: 'idle', currentVersion: app.getVersion() }
     }
   };
@@ -382,7 +391,10 @@ function applicationState(scope = 'panel') {
     return {
       shortcuts: snapshot.shortcuts.map(({ iconData, ...item }) => item),
       categories: snapshot.categories,
-      settings: { globalSearchShortcut: snapshot.settings.globalSearchShortcut },
+      settings: {
+        globalSearchShortcut: snapshot.settings.globalSearchShortcut,
+        quickLaunchShortcut: snapshot.settings.quickLaunchShortcut
+      },
       ...shared
     };
   }
@@ -516,12 +528,18 @@ async function promptForOldPortableCaches() {
 async function openShortcut(id) {
   const item = store.data.shortcuts.find((entry) => entry.id === id);
   if (!item) throw new Error('快捷方式不存在');
-  let errorMessage = '';
-  if (isUrl(item.target)) await shell.openExternal(item.target);
-  else errorMessage = await shell.openPath(item.target);
-  if (errorMessage) throw new Error(errorMessage);
-  store.recordUse(id);
-  broadcastState();
+  createLaunchPlan(item.target);
+  setImmediate(async () => {
+    try {
+      await launchTarget(item.target, { openExternal: shell.openExternal, openPath: shell.openPath });
+      store.recordUse(id);
+      setTimeout(broadcastState, 60);
+    } catch (error) {
+      store.setCheckResult(id, 'broken');
+      store.save();
+      pushNotification({ title: '快捷方式启动失败', message: `${item.name}：${error.message}`, kind: 'warning' });
+    }
+  });
   return true;
 }
 
@@ -553,7 +571,7 @@ function startClipboardMonitor() {
     if (!text || text === lastClipboardText) return;
     lastClipboardText = text;
     const isLocal = /^[a-z]:[\\/]/i.test(text) && fs.existsSync(text);
-    if (!isUrl(text) && !isLocal) return;
+    if (!isProtocolTarget(text) && !isLocal) return;
     if (store.data.shortcuts.some((item) => item.target.toLowerCase() === text.toLowerCase())) return;
     petWindow?.webContents.send('clipboard:candidate', { target: text, type: isLocal ? inferType(text) : 'website' });
   }, 1500);
@@ -638,7 +656,7 @@ async function chooseTargets(_event, kind = 'file') {
 }
 
 async function beautifyLocalIcon(item) {
-  if (!item || isUrl(item.target) || !fs.existsSync(item.target)) return item;
+  if (!item || isProtocolTarget(item.target) || !fs.existsSync(item.target)) return item;
   try {
     const icon = await app.getFileIcon(item.target, { size: 'large' });
     if (!icon.isEmpty()) return store.updateShortcut(item.id, { iconData: icon.toDataURL(), iconBackground: '#f1efff' });
@@ -664,7 +682,7 @@ async function addLocalPaths(paths) {
 
 async function checkShortcut(item) {
   let status = 'broken';
-  if (isUrl(item.target)) {
+  if (isWebUrl(item.target)) {
     try {
       const response = await fetch(item.target, {
         method: 'HEAD',
@@ -676,6 +694,8 @@ async function checkShortcut(item) {
     } catch {
       status = 'unknown';
     }
+  } else if (isProtocolTarget(item.target)) {
+    status = 'unknown';
   } else {
     status = fs.existsSync(item.target) ? 'ok' : 'broken';
   }
@@ -750,9 +770,9 @@ async function capturePanelImage() {
   return result.filePath;
 }
 
-async function checkForUpdates(feedUrl = store.data.settings.updateFeedUrl) {
+async function checkForUpdates() {
   try {
-    const result = await updateManager.check(feedUrl);
+    const result = await updateManager.check();
     broadcastState();
     return result;
   } catch (error) {
@@ -765,6 +785,11 @@ async function checkForUpdates(feedUrl = store.data.settings.updateFeedUrl) {
 async function downloadAvailableUpdate() {
   const update = updateManager.lastResult;
   if (update?.status !== 'available') throw new Error('当前没有可下载的新版本');
+  if (!update.downloadUrl) {
+    if (!update.releaseUrl) throw new Error('新版本暂时没有可用的便携包');
+    await shell.openExternal(update.releaseUrl);
+    return update.releaseUrl;
+  }
   const result = await dialog.showSaveDialog(panelWindow, {
     title: '保存快捷宠更新包',
     defaultPath: `QuickPet-Update-${update.version}.exe`,
@@ -784,7 +809,7 @@ async function executeCommand(id) {
   if (id === 'capture-panel') { const filePath = await capturePanelImage(); return { message: filePath ? '截图已保存' : '已取消截图' }; }
   if (id === 'toggle-walk') { const settings = store.updateSettings({ autoWalk: store.data.settings.autoWalk === false }); broadcastState(); return { message: settings.autoWalk ? '桌宠继续散步' : '桌宠已暂停散步' }; }
   if (id === 'clear-cache') { await maintenanceManager.clearCache(); return { message: '运行缓存已清理' }; }
-  if (id === 'check-update') { const result = await checkForUpdates(); return { message: result.status === 'available' ? `发现新版本 ${result.version}` : result.status === 'unconfigured' ? '尚未配置更新地址' : '当前已经是最新版本' }; }
+  if (id === 'check-update') { const result = await checkForUpdates(); return { message: result.status === 'available' ? `发现新版本 ${result.version}` : result.status === 'unavailable' ? result.message : '当前已经是最新版本' }; }
   throw new Error('没有找到这个命令');
 }
 
@@ -905,12 +930,12 @@ function registerIpc() {
   ipcMain.handle('window:hide', () => panelWindow?.hide());
   ipcMain.handle('window:minimize', () => panelWindow?.minimize());
   ipcMain.handle('search:hide', () => searchWindow?.hide());
-  ipcMain.handle('search:toggle', (_event, force) => toggleSearch(force));
+  ipcMain.handle('search:toggle', (_event, force, mode = 'search') => toggleSearch(force, mode));
 
   ipcMain.handle('shortcut:refresh-icon', async (_event, id) => {
     const item = store.data.shortcuts.find((entry) => entry.id === id);
     if (!item) throw new Error('快捷方式不存在');
-    if (isUrl(item.target)) return item;
+    if (isProtocolTarget(item.target)) return item;
     const icon = await app.getFileIcon(item.target, { size: 'large' });
     const updated = store.updateShortcut(id, { iconData: icon.toDataURL(), iconBackground: item.iconBackground || '#f1efff' });
     broadcastState();
@@ -979,6 +1004,12 @@ function registerIpc() {
     broadcastState();
     return result;
   });
+  ipcMain.handle('shortcut:remove-all', () => {
+    const count = store.removeAllShortcuts();
+    syncShortcutHotkeys();
+    broadcastState();
+    return count;
+  });
   ipcMain.handle('shortcut:open', (_event, id) => openShortcut(id));
   ipcMain.handle('shortcut:check-all', () => checkAllShortcuts());
   ipcMain.handle('shortcut:reset-usage', () => { const result = store.resetUsage(); broadcastState(); return result; });
@@ -1033,6 +1064,7 @@ function registerIpc() {
     const previousPanelWidth = store.data.settings.panelWidth;
     const previousPanelHeight = store.data.settings.panelHeight;
     const previousSearchShortcut = store.data.settings.globalSearchShortcut;
+    const previousLaunchShortcut = store.data.settings.quickLaunchShortcut;
     const settings = store.updateSettings(changes || {});
     if (Object.hasOwn(changes || {}, 'launchAtLogin')) {
       app.setLoginItemSettings({
@@ -1053,7 +1085,7 @@ function registerIpc() {
     if (panelWindow && (settings.panelWidth !== previousPanelWidth || settings.panelHeight !== previousPanelHeight)) {
       positionPanel();
     }
-    if (settings.globalSearchShortcut !== previousSearchShortcut) {
+    if (settings.globalSearchShortcut !== previousSearchShortcut || settings.quickLaunchShortcut !== previousLaunchShortcut) {
       registerSearchShortcut(settings.globalSearchShortcut);
       syncShortcutHotkeys();
     }
@@ -1281,10 +1313,7 @@ function registerIpc() {
   ipcMain.handle('maintenance:exit-safe-mode', () => leaveSafeMode());
   ipcMain.handle('maintenance:remove-program', (_event, removeUserData) => scheduleProgramRemoval(Boolean(removeUserData)));
 
-  ipcMain.handle('update:check', (_event, feedUrl = '') => {
-    if (feedUrl) store.updateSettings({ updateFeedUrl: feedUrl });
-    return checkForUpdates(store.data.settings.updateFeedUrl);
-  });
+  ipcMain.handle('update:check', () => checkForUpdates());
   ipcMain.handle('update:download', () => downloadAvailableUpdate());
   ipcMain.handle('command:execute', (_event, id) => executeCommand(String(id || '')));
 
@@ -1295,6 +1324,7 @@ function registerIpc() {
       { label: `摸摸${store.data.petStatus.name}`, click: () => { store.interactWithPet('pet'); broadcastState(); } },
       { label: `给${store.data.petStatus.name}喂食`, click: () => { store.interactWithPet('feed'); broadcastState(); } },
       { label: '打开全局快捷搜索', click: () => toggleSearch(true) },
+      { label: '打开快捷启动台', click: () => toggleSearch(true, 'launcher') },
       { type: 'separator' },
       { label: '设置', click: () => navigatePanel('settings') },
       {
@@ -1424,15 +1454,7 @@ if (!gotLock) {
       return;
     }
     migrationManager = new MigrationManager({ dataFile, modelDirectory, assetDirectory, store, backupManager, appVersion: app.getVersion() });
-    updateManager = new UpdateManager({
-      currentVersion: app.getVersion(),
-      feedUrl: store.data.settings.updateFeedUrl,
-      localManifests: [
-        path.join(path.dirname(process.execPath), 'quickpet-update.json'),
-        process.env.PORTABLE_EXECUTABLE_DIR ? path.join(process.env.PORTABLE_EXECUTABLE_DIR, 'quickpet-update.json') : '',
-        path.join(userDataDirectory, 'quickpet-update.json')
-      ]
-    });
+    updateManager = new UpdateManager({ currentVersion: app.getVersion() });
     registerModelProtocols();
     try { modelLibrary.migrateLegacyModel(customPetModelPath()); } catch (error) { console.warn('legacy-model-migration-failed', error.message); }
     if (is3dModelTest) {
@@ -1560,6 +1582,17 @@ if (!gotLock) {
     }
     if (isUiTest) {
       whenWebContentsLoaded(panelWindow.webContents, () => {
+        store.removeAllShortcuts();
+        for (let index = 0; index < 12; index += 1) {
+          store.addShortcut({
+            name: index === 0 ? '一个名称很长但不应该挤坏布局的 Steam 游戏快捷方式' : `快捷项目 ${index + 1}`,
+            target: index === 0 ? 'steam://rungameid/730' : `https://example.com/item-${index + 1}`,
+            favorite: index < 3,
+            hotkey: index === 1 ? 'CommandOrControl+Shift+K' : ''
+          }, { persist: false });
+        }
+        store.save();
+        broadcastState();
         navigatePanel('settings');
         setTimeout(async () => {
           try {
@@ -1570,6 +1603,11 @@ if (!gotLock) {
             })()`);
             const screenshotPath = path.join(process.cwd(), 'tests', 'settings-center.png');
             fs.writeFileSync(screenshotPath, screenshot.toPNG());
+            await panelWindow.webContents.executeJavaScript("document.querySelector('.global-hotkeys-card').scrollIntoView({block:'start'})");
+            await new Promise((resolve) => setTimeout(resolve, 250));
+            const hotkeysScreenshot = await panelWindow.webContents.capturePage();
+            const hotkeysScreenshotPath = path.join(process.cwd(), 'tests', 'settings-hotkeys.png');
+            fs.writeFileSync(hotkeysScreenshotPath, hotkeysScreenshot.toPNG());
             await panelWindow.webContents.executeJavaScript("document.querySelector('.model-center-card').scrollIntoView({block:'start'})");
             await new Promise((resolve) => setTimeout(resolve, 250));
             const modelScreenshot = await panelWindow.webContents.capturePage();
@@ -1585,9 +1623,14 @@ if (!gotLock) {
             const searchScreenshot = await searchWindow.webContents.capturePage();
             const searchScreenshotPath = path.join(process.cwd(), 'tests', 'global-search.png');
             fs.writeFileSync(searchScreenshotPath, searchScreenshot.toPNG());
+            toggleSearch(true, 'launcher');
+            await new Promise((resolve) => setTimeout(resolve, 250));
+            const launcherScreenshot = await searchWindow.webContents.capturePage();
+            const launcherScreenshotPath = path.join(process.cwd(), 'tests', 'quick-launcher.png');
+            fs.writeFileSync(launcherScreenshotPath, launcherScreenshot.toPNG());
             console.log(`ui-test panel-bounds=${JSON.stringify(panelWindow.getBounds())}`);
             console.log(`ui-test sidebar-layout=${JSON.stringify(sidebarLayout)}`);
-            console.log(`ui-test screenshots=${screenshotPath},${modelScreenshotPath},${automationScreenshotPath},${searchScreenshotPath}`);
+            console.log(`ui-test screenshots=${screenshotPath},${hotkeysScreenshotPath},${modelScreenshotPath},${automationScreenshotPath},${searchScreenshotPath},${launcherScreenshotPath}`);
             exitAutomatedTest(0);
           } catch (error) {
             console.error(error.stack || error.message);
@@ -1922,7 +1965,7 @@ if (!gotLock) {
               mark('maintenance');
 
               const update = await api.checkForUpdates('');
-              assert(['current', 'available', 'unconfigured'].includes(update.status), 'update check'); mark('updates');
+              assert(['current', 'available', 'unavailable'].includes(update.status), 'update check'); mark('updates');
 
               await api.executeCommand('toggle-walk');
               await api.executeCommand('open-settings');

@@ -26,7 +26,7 @@ contextBridge.exposeInMainWorld('quickPet', {
     return () => ipcRenderer.removeListener('pet:motion', listener);
   },
   onSearchFocus: (callback) => {
-    const listener = () => callback();
+    const listener = (_event, mode) => callback(mode);
     ipcRenderer.on('search:focus', listener);
     return () => ipcRenderer.removeListener('search:focus', listener);
   },
@@ -48,6 +48,7 @@ contextBridge.exposeInMainWorld('quickPet', {
   chooseShortcutIcon: (id) => ipcRenderer.invoke('shortcut:choose-icon', id),
   clearShortcutIcon: (id) => ipcRenderer.invoke('shortcut:clear-icon', id),
   removeShortcut: (id) => ipcRenderer.invoke('shortcut:remove', id),
+  removeAllShortcuts: () => ipcRenderer.invoke('shortcut:remove-all'),
   openShortcut: (id) => ipcRenderer.invoke('shortcut:open', id),
   checkAll: () => ipcRenderer.invoke('shortcut:check-all'),
   resetUsage: () => ipcRenderer.invoke('shortcut:reset-usage'),
@@ -94,7 +95,7 @@ contextBridge.exposeInMainWorld('quickPet', {
   openDataFolder: () => ipcRenderer.invoke('maintenance:open-data'),
   exitSafeMode: () => ipcRenderer.invoke('maintenance:exit-safe-mode'),
   removeProgram: (removeUserData) => ipcRenderer.invoke('maintenance:remove-program', removeUserData),
-  checkForUpdates: (feedUrl) => ipcRenderer.invoke('update:check', feedUrl),
+  checkForUpdates: () => ipcRenderer.invoke('update:check'),
   downloadUpdate: () => ipcRenderer.invoke('update:download'),
   executeCommand: (id) => ipcRenderer.invoke('command:execute', id),
   showPetMenu: () => ipcRenderer.invoke('pet:context-menu'),
@@ -104,7 +105,8 @@ contextBridge.exposeInMainWorld('quickPet', {
   movePetDrag: (x, y) => ipcRenderer.send('pet:drag-move', Number(x), Number(y)),
   endPetDrag: () => ipcRenderer.send('pet:drag-end'),
   hideSearch: () => ipcRenderer.invoke('search:hide'),
-  toggleSearch: (force) => ipcRenderer.invoke('search:toggle', force),
+  toggleSearch: (force) => ipcRenderer.invoke('search:toggle', force, 'search'),
+  toggleLauncher: (force) => ipcRenderer.invoke('search:toggle', force, 'launcher'),
   addRule: (input) => ipcRenderer.invoke('rule:add', input),
   updateRule: (id, changes) => ipcRenderer.invoke('rule:update', id, changes),
   removeRule: (id) => ipcRenderer.invoke('rule:remove', id),

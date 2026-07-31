@@ -417,12 +417,20 @@ function formatBytes(value) {
 
 function renderHotkeyCenter() {
   const list = $('#hotkeyCenterList');
-  const shortcuts = [...state.shortcuts].sort((a, b) => Number(Boolean(b.hotkey)) - Number(Boolean(a.hotkey)) || a.name.localeCompare(b.name, 'zh-CN'));
+  const select = $('#hotkeyShortcutSelect');
+  const selectedId = select.value;
+  const allShortcuts = [...state.shortcuts].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+  select.innerHTML = `<option value="">选择快捷项目</option>${allShortcuts.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join('')}`;
+  if (allShortcuts.some((item) => item.id === selectedId)) select.value = selectedId;
+  const selected = allShortcuts.find((item) => item.id === select.value);
+  $('#hotkeyCenterInput').value = formatHotkey(selected?.hotkey || '');
+  $('#saveHotkeyCenterButton').disabled = !selected;
+  const shortcuts = allShortcuts.filter((item) => item.hotkey);
   list.innerHTML = shortcuts.length ? shortcuts.map((item) => {
     const registration = state.hotkeyRegistrations?.[item.id];
-    const status = !item.hotkey ? '未设置' : registration?.status === 'registered' ? '已生效' : registration?.message || '等待注册';
-    return `<div class="hotkey-center-row" data-hotkey-id="${escapeHtml(item.id)}"><span><b>${escapeHtml(item.name)}</b><small>${escapeHtml(status)}</small></span><kbd class="${item.hotkey && registration?.status !== 'registered' ? 'unavailable' : ''}">${escapeHtml(formatHotkey(item.hotkey) || '—')}</kbd><button data-hotkey-action="edit">编辑</button><button data-hotkey-action="clear" ${item.hotkey ? '' : 'disabled'}>清除</button></div>`;
-  }).join('') : '<p class="empty-inline">添加快捷方式后可在这里统一管理组合键。</p>';
+    const status = registration?.status === 'registered' ? '已生效' : registration?.message || '等待注册';
+    return `<div class="hotkey-center-row" data-hotkey-id="${escapeHtml(item.id)}"><span><b>${escapeHtml(item.name)}</b><small>${escapeHtml(status)}</small></span><kbd class="${registration?.status !== 'registered' ? 'unavailable' : ''}">${escapeHtml(formatHotkey(item.hotkey))}</kbd><button data-hotkey-action="select">修改</button><button data-hotkey-action="clear">清除</button></div>`;
+  }).join('') : '<p class="empty-inline">尚未给任何快捷项目设置组合键。</p>';
 }
 
 function renderUsageStats() {
@@ -521,16 +529,18 @@ function renderStorageReport() {
 
 function renderUpdateStatus() {
   const update = state.runtime?.update || { status: 'idle' };
+  const notes = String(update.notes || '').split(/\r?\n/).find(Boolean)?.slice(0, 140) || '';
   const text = {
     idle: '尚未检查',
     checking: '正在检查…',
-    unconfigured: '未发现同目录更新清单，也未设置在线更新源',
+    unavailable: update.message || 'GitHub 更新仓库暂不可用',
     current: `当前 ${state.appVersion || ''} 已是最新版本`,
-    available: `发现 ${update.version}${update.notes ? ` · ${update.notes}` : ''}`,
-    error: `检查失败：${update.message || '无法连接更新源'}`
+    available: `发现 ${update.version}${notes ? ` · ${notes}` : ''}`,
+    error: `检查失败：${update.message || '无法连接 GitHub'}`
   }[update.status] || '尚未检查';
   $('#updateStatus').textContent = text;
-  $('#downloadUpdateButton').classList.toggle('hidden', update.status !== 'available' || !update.downloadUrl);
+  $('#downloadUpdateButton').classList.toggle('hidden', update.status !== 'available');
+  $('#downloadUpdateButton').textContent = update.downloadUrl ? '下载新版本' : '查看发布页';
 }
 
 function renderSettings() {
@@ -571,8 +581,11 @@ function renderSettings() {
   $('#launchAtLoginInput').checked = Boolean(settings.launchAtLogin);
   $('#autoCheckUpdatesInput').checked = settings.autoCheckUpdates !== false;
   $('#portableCacheCleanupPromptInput').checked = settings.portableCacheCleanupPrompt !== false;
-  $('#updateFeedInput').value = settings.updateFeedUrl || '';
-  $('#globalShortcutSelect').value = settings.globalSearchShortcut === 'Alt+Space' ? 'Alt+Space' : 'CommandOrControl+Alt+Space';
+  $('#globalSearchShortcutInput').value = formatHotkey(settings.globalSearchShortcut || 'Alt+Space');
+  $('#quickLaunchShortcutInput').value = formatHotkey(settings.quickLaunchShortcut || 'CommandOrControl+Alt+Space');
+  const registrations = state.runtime?.globalShortcutRegistrations || {};
+  $('#globalSearchShortcutStatus').textContent = registrations.search ? '已生效' : '未注册，可能被其他程序占用';
+  $('#quickLaunchShortcutStatus').textContent = registrations.launcher ? '已生效' : '未注册，可能被其他程序占用';
   const is3dMode = settings.petRenderMode === '3d';
   const model = activeCustomModel();
   const modelDisplayName = settings.petModelPreset === 'custom' ? (model?.name || '自定义模型不存在') : '内置动画狐狸';
@@ -900,10 +913,19 @@ function bindLibraryActions() {
           await window.quickPet.removeShortcut(item.id);
           showToast('已移除快捷方式');
         }
-      }
+      } else await window.quickPet.openShortcut(item.id);
     } catch (error) {
       showToast(cleanError(error), 'error');
     }
+  });
+  $('#clearAllShortcutsButton').addEventListener('click', async () => {
+    const count = state.shortcuts.length;
+    if (!count) return showToast('当前没有快捷方式');
+    if (!confirm(`确定清空全部 ${count} 个快捷方式吗？\n只会删除快捷记录，不会删除原文件。`)) return;
+    try {
+      const removed = await window.quickPet.removeAllShortcuts();
+      showToast(`已清空 ${removed} 个快捷方式`);
+    } catch (error) { showToast(cleanError(error), 'error'); }
   });
   elements.shortcutGrid.addEventListener('dragstart', (event) => {
     const card = event.target.closest('.shortcut-card');
@@ -1059,10 +1081,31 @@ function bindSettings() {
   $('#petScreenModeSelect').addEventListener('change', () => window.quickPet.updateSettings({ petScreenMode: $('#petScreenModeSelect').value }));
   $('#activityPaddingInput').addEventListener('input', () => { $('#activityPaddingValue').textContent = `${$('#activityPaddingInput').value}px`; });
   $('#activityPaddingInput').addEventListener('change', () => window.quickPet.updateSettings({ activityPadding: Number($('#activityPaddingInput').value) }));
-  $('#globalShortcutSelect').addEventListener('change', async () => {
-    const settings = await window.quickPet.updateSettings({ globalSearchShortcut: $('#globalShortcutSelect').value });
-    showToast(`全局搜索快捷键：${settings.globalSearchShortcut.replace('CommandOrControl', 'Ctrl')}`);
-  });
+  const bindSettingsHotkey = (inputSelector, resetSelector, key, fallback, label) => {
+    const input = $(inputSelector);
+    input.addEventListener('focus', () => input.closest('.hotkey-recorder').classList.add('recording'));
+    input.addEventListener('blur', () => input.closest('.hotkey-recorder').classList.remove('recording'));
+    input.addEventListener('keydown', async (event) => {
+      event.preventDefault();
+      const hotkey = hotkeyFromKeyboardEvent(event);
+      if (!hotkey) return;
+      try {
+        const settings = await window.quickPet.updateSettings({ [key]: hotkey });
+        input.value = formatHotkey(settings[key]);
+        input.blur();
+        showToast(`${label}已更新`);
+      } catch (error) { showToast(cleanError(error), 'error'); }
+    });
+    $(resetSelector).addEventListener('click', async () => {
+      try {
+        const settings = await window.quickPet.updateSettings({ [key]: fallback });
+        input.value = formatHotkey(settings[key]);
+        showToast(`${label}已恢复默认`);
+      } catch (error) { showToast(cleanError(error), 'error'); }
+    });
+  };
+  bindSettingsHotkey('#globalSearchShortcutInput', '#clearGlobalSearchShortcutButton', 'globalSearchShortcut', 'Alt+Space', '快捷搜索组合键');
+  bindSettingsHotkey('#quickLaunchShortcutInput', '#clearQuickLaunchShortcutButton', 'quickLaunchShortcut', 'CommandOrControl+Alt+Space', '快捷启动台组合键');
   $('#petRenderModeSelect').addEventListener('change', async () => {
     await window.quickPet.updateSettings({ petRenderMode: $('#petRenderModeSelect').value });
     showToast($('#petRenderModeSelect').value === '3d' ? '已经切换为 3D 动态动物' : '已经切换为 2D 自定义皮肤');
@@ -1174,11 +1217,37 @@ function bindSettings() {
     const action = event.target.closest('[data-hotkey-action]')?.dataset.hotkeyAction;
     const item = state.shortcuts.find((entry) => entry.id === row?.dataset.hotkeyId);
     if (!item || !action) return;
-    if (action === 'edit') openModal(item);
+    if (action === 'select') {
+      $('#hotkeyShortcutSelect').value = item.id;
+      $('#hotkeyCenterInput').value = formatHotkey(item.hotkey);
+      $('#hotkeyCenterInput').focus();
+    }
     else if (action === 'clear') {
       await window.quickPet.updateShortcut(item.id, { hotkey: '' });
       showToast('组合键已清除');
     }
+  });
+  $('#hotkeyShortcutSelect').addEventListener('change', () => {
+    const item = state.shortcuts.find((entry) => entry.id === $('#hotkeyShortcutSelect').value);
+    $('#hotkeyCenterInput').value = formatHotkey(item?.hotkey || '');
+    $('#saveHotkeyCenterButton').disabled = !item;
+  });
+  $('#hotkeyCenterInput').addEventListener('focus', () => $('#hotkeyCenterInput').closest('.hotkey-recorder').classList.add('recording'));
+  $('#hotkeyCenterInput').addEventListener('blur', () => $('#hotkeyCenterInput').closest('.hotkey-recorder').classList.remove('recording'));
+  $('#hotkeyCenterInput').addEventListener('keydown', (event) => {
+    event.preventDefault();
+    const hotkey = hotkeyFromKeyboardEvent(event);
+    if (hotkey === null) return;
+    $('#hotkeyCenterInput').value = hotkey;
+  });
+  $('#clearHotkeyCenterInputButton').addEventListener('click', () => { $('#hotkeyCenterInput').value = ''; });
+  $('#saveHotkeyCenterButton').addEventListener('click', async () => {
+    const id = $('#hotkeyShortcutSelect').value;
+    if (!id) return;
+    try {
+      await window.quickPet.updateShortcut(id, { hotkey: $('#hotkeyCenterInput').value });
+      showToast($('#hotkeyCenterInput').value ? '项目组合键已应用' : '项目组合键已清除');
+    } catch (error) { showToast(cleanError(error), 'error'); }
   });
   $('#resetUsageButton').addEventListener('click', async () => {
     if (!confirm('确定清空所有本地打开次数和最近使用记录吗？')) return;
@@ -1240,21 +1309,19 @@ function bindSettings() {
     await window.quickPet.updateSettings({ portableCacheCleanupPrompt: enabled });
     showToast(enabled ? '旧版缓存提醒已开启' : '旧版缓存提醒已关闭');
   });
-  $('#updateFeedInput').addEventListener('change', async () => {
-    const value = $('#updateFeedInput').value.trim();
-    if (value && !/^https:\/\//i.test(value)) { showToast('更新源必须使用 HTTPS', 'error'); return; }
-    await window.quickPet.updateSettings({ updateFeedUrl: value });
-  });
   $('#checkUpdateButton').addEventListener('click', async () => {
     $('#checkUpdateButton').disabled = true;
     try {
-      const result = await window.quickPet.checkForUpdates($('#updateFeedInput').value.trim());
-      showToast(result.status === 'available' ? `发现新版本 ${result.version}` : result.status === 'unconfigured' ? '请配置 HTTPS 更新源或放置同目录更新清单' : '当前已经是最新版本');
+      const result = await window.quickPet.checkForUpdates();
+      showToast(result.status === 'available' ? `发现新版本 ${result.version}` : result.status === 'unavailable' ? result.message : '当前已经是最新版本');
     } catch (error) { showToast(cleanError(error), 'error'); }
     finally { $('#checkUpdateButton').disabled = false; }
   });
   $('#downloadUpdateButton').addEventListener('click', async () => {
-    try { const file = await window.quickPet.downloadUpdate(); if (file) showToast('更新包已下载并通过校验'); } catch (error) { showToast(cleanError(error), 'error'); }
+    try {
+      const result = await window.quickPet.downloadUpdate();
+      if (result) showToast(/^https:\/\//i.test(result) ? '已打开 GitHub 发布页' : '更新包已下载并通过校验');
+    } catch (error) { showToast(cleanError(error), 'error'); }
   });
 
   $('#addCategoryForm').addEventListener('submit', async (event) => {

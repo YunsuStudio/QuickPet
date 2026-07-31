@@ -51,6 +51,17 @@ class AssetStore {
     const target = this.resolve(reference);
     return target && fs.existsSync(target) ? pathToFileURL(target).href : '';
   }
+
+  remove(reference) {
+    const target = this.resolve(reference);
+    if (!target) return false;
+    try {
+      fs.rmSync(target, { force: true });
+      return true;
+    } catch {
+      return false;
+    }
+  }
 }
 
 module.exports = { AssetStore, MAX_ASSET_BYTES };

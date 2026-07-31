@@ -10,8 +10,8 @@
 
 <p>
   <img alt="Windows 10 和 11 x64" src="https://img.shields.io/badge/Windows-10%20%7C%2011%20x64-111111?style=flat-square&logo=windows&logoColor=white">
-  <img alt="版本 0.11.21" src="https://img.shields.io/badge/version-0.11.21-111111?style=flat-square">
-  <img alt="90 项测试通过" src="https://img.shields.io/badge/tests-90%20passed-111111?style=flat-square">
+  <img alt="版本 0.12.0" src="https://img.shields.io/badge/version-0.12.0-111111?style=flat-square">
+  <img alt="99 项测试通过" src="https://img.shields.io/badge/tests-99%20passed-111111?style=flat-square">
   <img alt="MIT 许可" src="https://img.shields.io/badge/license-MIT-111111?style=flat-square">
   <a href="https://github.com/YunsuStudio/QuickPet/actions/workflows/ci.yml"><img alt="CI 状态" src="https://github.com/YunsuStudio/QuickPet/actions/workflows/ci.yml/badge.svg"></a>
 </p>
@@ -31,7 +31,7 @@
 | 项目 | 说明 |
 | --- | --- |
 | 支持系统 | Windows 10 / 11 x64 |
-| 当前文件 | `QuickPet-Portable-0.11.21-x64.exe` |
+| 当前文件 | `QuickPet-Portable-0.12.0-x64.exe` |
 | 安装方式 | 无需安装，不自动创建快捷方式 |
 | 首次运行 | 在 EXE 同目录创建 `QuickPet-Portable-Cache` |
 | 数据位置 | 默认保存在本机，可备份和完整迁移 |
@@ -46,8 +46,8 @@
 
 | 快捷收纳 | 会活动的入口 |
 | --- | --- |
-| 收纳网址、程序、文件和文件夹。支持拖放、自动分类、标签、收藏、最近使用和手动排序。 | 桌宠会散步、奔跑、观察、休息和睡觉，可在多块屏幕之间活动，也能在全屏应用运行时自动隐藏。 |
-| **不只靠鼠标**<br>使用全局搜索快速查找，并可为单个项目录制 `Ctrl`、`Alt`、`Shift`、`Win` 组合键。 | **不限制外观**<br>使用 2D 图片、GIF、GLB、VRM 或 Live2D 模型，自定义大小、方向、动作和行为。 |
+| 收纳网址、程序、文件、文件夹、`.lnk/.url` 与 Steam 等协议。支持拖放、自动分类、标签、收藏、最近使用和手动排序。 | 桌宠会散步、奔跑、观察、休息和睡觉，可在多块屏幕之间活动，也能在全屏应用运行时自动隐藏。 |
+| **不只靠鼠标**<br>使用全局搜索或快捷启动台，并可为全局入口和单个项目录制自定义组合键。 | **不限制外观**<br>使用 2D 图片、GIF、GLB、VRM 或 Live2D 模型，自定义大小、方向、动作和行为。 |
 | **自动整理**<br>通过分类规则、剪贴板收纳、动态文件夹和提醒减少重复操作。 | **数据留在本机**<br>图片抠图、模型读取、快捷数据和备份都在本地处理，不依赖云端账户。 |
 
 ## 真实桌宠动作
@@ -67,13 +67,13 @@
 | ![模型预览仓库](./docs/assets/quickpet-models.png) | ![自动化中心](./docs/assets/quickpet-automation.png) |
 | 保存多只模型，检查纹理、骨骼和动作，调整行为与跨屏范围。 | 管理分类规则、剪贴板、动态文件夹、提醒和多桌宠。 |
 
-### 全局搜索
+### 搜索与启动台
 
-<p align="center">
-  <img src="./docs/assets/quickpet-search.png" width="640" alt="快捷宠全局搜索">
-</p>
+| 全局搜索 | 快捷启动台 |
+| --- | --- |
+| ![快捷宠全局搜索](./docs/assets/quickpet-search.png) | ![快捷宠快捷启动台](./docs/assets/quickpet-launcher.png) |
 
-默认按 `Alt + Space` 呼出。若组合键已被系统占用，程序会尝试 `Ctrl + Alt + Space`。输入 `>` 可查找设置、检查、截图、缓存清理等维护命令。
+默认按 `Alt + Space` 呼出搜索，按 `Ctrl + Alt + Space` 呼出快捷启动台。两个全局组合键都能在设置中直接录制修改；输入 `>` 可查找设置、检查、截图、缓存清理等维护命令。
 
 ## 模型与图片支持
 
@@ -117,13 +117,13 @@ npm test
 npm run build
 ```
 
-构建产物位于 `dist/QuickPet-Portable-0.11.21-x64.exe`。项目不会生成 NSIS、IExpress 或其他安装包。
+构建产物位于 `dist/QuickPet-Portable-0.12.0-x64.exe`。项目不会生成 NSIS、IExpress 或其他安装包。
 
 ## 测试状态
 
-当前 90 项自动测试全部通过，覆盖分类、搜索、组合键、桌宠拖动、透明区域点击、模型导入、备份恢复、便携缓存和双屏边界等主要流程。
+当前 99 项自动测试全部通过，覆盖分类、协议启动、搜索、组合键、桌宠拖动、透明区域点击、模型导入、备份恢复、便携缓存和双屏边界等主要流程。
 
-性能记录：CPU `0.77%`、峰值内存 `362.8 MB`、3D 空闲帧率 `30.07 FPS`。
+性能记录：CPU `0.69%`、峰值内存 `338.7 MB`、3D 空闲帧率 `30.10 FPS`。
 
 ## 开源与贡献
 

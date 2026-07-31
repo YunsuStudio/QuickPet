@@ -72,7 +72,7 @@
 
           <div id="summaryBar" class="summary-bar">
             <span id="summaryText">还没有快捷方式</span>
-            <button id="checkButton" class="text-button">检查可用性</button>
+            <span class="summary-actions"><button id="checkButton" class="text-button">检查可用性</button><button id="clearAllShortcutsButton" class="text-button danger-text" title="清空全部快捷方式">⌫ 清空全部</button></span>
           </div>
 
           <div id="shortcutGrid" class="shortcut-grid"></div>
@@ -167,14 +167,19 @@
               <div class="scan-grid"><button class="secondary-button scan-button" data-scan="desktop">扫描桌面</button><button class="ghost-button scan-button" data-scan="start-menu">扫描开始菜单</button><button class="ghost-button scan-button" data-scan="bookmarks">导入浏览器书签</button><button class="primary-button scan-button" data-scan="all">扫描全部</button></div>
             </article>
 
-            <article class="settings-card">
-              <div class="settings-card-heading"><span class="settings-icon">⌕</span><div><h2>全局快捷搜索</h2><p>在任何窗口里呼出紧凑搜索框</p></div></div>
-              <div class="setting-row"><label for="globalShortcutSelect">呼出快捷键</label><select id="globalShortcutSelect" class="select-control"><option value="Alt+Space">Alt + Space</option><option value="CommandOrControl+Alt+Space">Ctrl + Alt + Space</option></select></div>
-              <p class="maintenance-copy">按快捷键后输入名称、标签或路径，使用方向键选择，回车直接打开。</p>
+            <article class="settings-card global-hotkeys-card">
+              <div class="settings-card-heading"><span class="settings-icon">⌕</span><div><h2>全局呼出</h2><p>分别设置搜索与快捷启动台</p></div></div>
+              <label class="hotkey-setting"><span>快捷搜索</span><div class="hotkey-recorder"><input id="globalSearchShortcutInput" class="text-control" readonly><button id="clearGlobalSearchShortcutButton" class="ghost-button" type="button" title="恢复默认快捷键">↺</button></div><small id="globalSearchShortcutStatus"></small></label>
+              <label class="hotkey-setting"><span>快捷启动台</span><div class="hotkey-recorder"><input id="quickLaunchShortcutInput" class="text-control" readonly><button id="clearQuickLaunchShortcutButton" class="ghost-button" type="button" title="恢复默认快捷键">↺</button></div><small id="quickLaunchShortcutStatus"></small></label>
             </article>
 
             <article class="settings-card settings-card-wide">
-              <div class="settings-card-heading"><span class="settings-icon">⌘</span><div><h2>快捷键台</h2><p>集中查看项目组合键与系统注册状态</p></div></div>
+              <div class="settings-card-heading"><span class="settings-icon">⌘</span><div><h2>快捷键台</h2><p>选择需要快捷启动的项目后设置组合键</p></div></div>
+              <div class="hotkey-assignment">
+                <select id="hotkeyShortcutSelect" class="select-control"><option value="">选择快捷项目</option></select>
+                <div class="hotkey-recorder"><input id="hotkeyCenterInput" class="text-control" readonly placeholder="按下组合键"><button id="clearHotkeyCenterInputButton" class="ghost-button" type="button" title="清除输入">×</button></div>
+                <button id="saveHotkeyCenterButton" class="secondary-button" type="button">应用</button>
+              </div>
               <div id="hotkeyCenterList" class="hotkey-center-list"></div>
             </article>
 
@@ -215,9 +220,8 @@
             </article>
 
             <article class="settings-card">
-              <div class="settings-card-heading"><span class="settings-icon">↻</span><div><h2>软件更新</h2><p>支持同目录清单或 HTTPS 更新源</p></div></div>
+              <div class="settings-card-heading"><span class="settings-icon">↻</span><div><h2>软件更新</h2><p>检查 YunsuStudio/QuickPet 的 GitHub Releases</p></div></div>
               <label class="switch-row"><span><b>启动时检查更新</b></span><input id="autoCheckUpdatesInput" type="checkbox"><i></i></label>
-              <details class="update-source"><summary>更新源</summary><input id="updateFeedInput" class="text-control" type="url" placeholder="https://.../latest.json"></details>
               <p id="updateStatus" class="maintenance-copy">尚未检查</p>
               <div class="button-row"><button id="checkUpdateButton" class="secondary-button">检查更新</button><button id="downloadUpdateButton" class="primary-button hidden">下载新版本</button></div>
             </article>

@@ -68,7 +68,7 @@ function scanWindowsShortcuts({ source, roots, readShortcutLink, includeRegularF
       const extension = path.extname(filePath).toLowerCase();
       let target = '';
       if (extension === '.lnk') {
-        try { target = readShortcutLink(filePath)?.target || ''; } catch {}
+        try { target = readShortcutLink(filePath)?.target ? filePath : ''; } catch {}
       } else if (extension === '.url') {
         target = parseInternetShortcut(filePath);
       } else if (includeRegularFiles && !/^\.(ini|db|log)$/i.test(extension)) {
@@ -98,7 +98,7 @@ function scanDesktop(roots, readShortcutLink) {
       const extension = path.extname(filePath).toLowerCase();
       let target = entry.isDirectory() ? filePath : '';
       if (extension === '.lnk') {
-        try { target = readShortcutLink(filePath)?.target || ''; } catch {}
+        try { target = readShortcutLink(filePath)?.target ? filePath : ''; } catch {}
       } else if (extension === '.url') target = parseInternetShortcut(filePath);
       else if (!target) target = filePath;
       if (target) output.push({ name: path.basename(entry.name, extension), target, type: inferType(target), source: '桌面' });

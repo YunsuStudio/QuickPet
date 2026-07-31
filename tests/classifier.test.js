@@ -16,6 +16,12 @@ test('识别常见网址和本地项目类型', () => {
   assert.equal(inferType('https://example.com'), 'website');
   assert.equal(inferType('C:\\Tools\\demo.exe'), 'app');
   assert.equal(inferType('C:\\Docs\\note.pdf'), 'file');
+  assert.equal(inferType('steam://rungameid/730'), 'app');
+  assert.equal(inferType('steam://rungameid/730', 'folder'), 'app');
+  assert.equal(inferType('spotify:track:demo'), 'app');
+  assert.equal(inferType('shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'), 'app');
+  assert.equal(inferType('C:\\Links\\Game.url'), 'website');
+  assert.equal(inferType('C:\\Links\\Game.url', 'file'), 'website');
 });
 
 test('补全 www 开头的网址并生成可读名称', () => {
@@ -25,8 +31,15 @@ test('补全 www 开头的网址并生成可读名称', () => {
 });
 
 test('按关键字和扩展名自动分类', () => {
-  assert.equal(classifyShortcut({ name: 'GitHub', target: 'https://github.com' }), 'develop');
+  assert.equal(classifyShortcut({ name: 'GitHub', target: 'https://github.com' }), 'work');
   assert.equal(classifyShortcut({ name: '课程资料', target: 'C:\\Docs\\lesson.pdf' }), 'study');
-  assert.equal(classifyShortcut({ name: '配色灵感', target: 'https://example.com/colors' }), 'design');
+  assert.equal(classifyShortcut({ name: '配色灵感', target: 'https://example.com/colors' }), 'work');
   assert.equal(classifyShortcut({ name: '普通项目', target: 'https://example.com' }), 'other');
+  assert.equal(classifyShortcut({ name: '代码片段', target: 'C:\\Work\\index.ts' }), 'work');
+  assert.equal(classifyShortcut({ name: '社交动态', target: 'https://weibo.com' }), 'life');
+});
+
+test('默认分类保持精简且稳定', () => {
+  const { DEFAULT_CATEGORIES } = require('../src/shared/classifier');
+  assert.deepEqual(DEFAULT_CATEGORIES.map((item) => item.id), ['work', 'study', 'media', 'tools', 'life', 'other']);
 });

@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 const { Readable } = require('node:stream');
 
 const MAX_UPDATE_BYTES = 400 * 1024 * 1024;
+const GITHUB_RELEASE_API = 'https://api.github.com/repos/YunsuStudio/QuickPet/releases/latest';
 
 async function downloadResponseToFile(response, destination, expectedHash, maxBytes = MAX_UPDATE_BYTES) {
   if (!response.body) throw new Error('更新服务器没有返回文件内容');
@@ -56,29 +57,46 @@ function validateManifest(input) {
   return { version: String(input.version), downloadUrl, sha256, notes: String(input.notes || '').slice(0, 2000) };
 }
 
+function parseGithubRelease(input) {
+  if (!input || typeof input !== 'object') throw new Error('GitHub 返回的版本信息无效');
+  const version = String(input.tag_name || '').replace(/^v/i, '');
+  if (!/^\d+\.\d+\.\d+(?:\.\d+)?$/.test(version)) throw new Error('GitHub Release 的版本号无效');
+  const assets = Array.isArray(input.assets) ? input.assets : [];
+  const asset = assets.find((item) => /portable.*x64.*\.exe$/i.test(String(item?.name || '')) || /x64.*portable.*\.exe$/i.test(String(item?.name || '')));
+  const digest = /^sha256:([a-f0-9]{64})$/i.exec(String(asset?.digest || ''))?.[1]?.toUpperCase() || '';
+  const assetUrl = /^https:\/\//i.test(String(asset?.browser_download_url || '')) ? String(asset.browser_download_url) : '';
+  return {
+    version,
+    downloadUrl: digest ? assetUrl : '',
+    sha256: digest && assetUrl ? digest : '',
+    notes: String(input.body || '').slice(0, 2000),
+    releaseUrl: /^https:\/\//i.test(String(input.html_url || '')) ? String(input.html_url) : '',
+    assetName: String(asset?.name || '')
+  };
+}
+
 class UpdateManager {
-  constructor({ currentVersion, feedUrl = '', localManifests = [] }) {
+  constructor({ currentVersion, fetchImpl = globalThis.fetch }) {
     this.currentVersion = currentVersion;
-    this.feedUrl = feedUrl;
-    this.localManifests = localManifests;
+    this.fetchImpl = fetchImpl;
     this.lastResult = { status: 'idle', currentVersion };
   }
 
-  async check(feedUrl = this.feedUrl) {
+  async check() {
     this.lastResult = { status: 'checking', currentVersion: this.currentVersion };
-    let manifest;
-    for (const filePath of this.localManifests) {
-      if (!filePath || !fs.existsSync(filePath)) continue;
-      manifest = validateManifest(JSON.parse(fs.readFileSync(filePath, 'utf8')));
-      break;
+    const response = await this.fetchImpl(GITHUB_RELEASE_API, {
+      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'QuickPet-Updater/1.0', 'X-GitHub-Api-Version': '2022-11-28' },
+      signal: AbortSignal.timeout(10000)
+    });
+    if (response.status === 404) {
+      return (this.lastResult = {
+        status: 'unavailable',
+        currentVersion: this.currentVersion,
+        message: '更新仓库暂不可用，请稍后再试'
+      });
     }
-    if (!manifest && feedUrl) {
-      if (!/^https:\/\//i.test(feedUrl)) throw new Error('更新地址必须使用 HTTPS');
-      const response = await fetch(feedUrl, { headers: { 'User-Agent': 'QuickPet-Updater/1.0' }, signal: AbortSignal.timeout(10000) });
-      if (!response.ok) throw new Error(`更新服务器返回 ${response.status}`);
-      manifest = validateManifest(await response.json());
-    }
-    if (!manifest) return (this.lastResult = { status: 'unconfigured', currentVersion: this.currentVersion });
+    if (!response.ok) throw new Error(`GitHub 更新服务返回 ${response.status}`);
+    const manifest = parseGithubRelease(await response.json());
     const available = compareVersions(manifest.version, this.currentVersion) > 0;
     return (this.lastResult = { status: available ? 'available' : 'current', currentVersion: this.currentVersion, ...manifest });
   }
@@ -86,7 +104,7 @@ class UpdateManager {
   async download(manifest, destination) {
     const valid = validateManifest(manifest);
     if (!valid.downloadUrl) throw new Error('更新清单没有下载地址');
-    const response = await fetch(valid.downloadUrl, { headers: { 'User-Agent': 'QuickPet-Updater/1.0' }, signal: AbortSignal.timeout(120000) });
+    const response = await this.fetchImpl(valid.downloadUrl, { headers: { 'User-Agent': 'QuickPet-Updater/1.0' }, signal: AbortSignal.timeout(120000) });
     if (!response.ok) throw new Error(`更新下载失败：${response.status}`);
     const length = Number(response.headers.get('content-length') || 0);
     if (length > MAX_UPDATE_BYTES) throw new Error('更新包超过 400 MB');
@@ -94,4 +112,4 @@ class UpdateManager {
   }
 }
 
-module.exports = { UpdateManager, compareVersions, validateManifest, downloadResponseToFile, MAX_UPDATE_BYTES };
+module.exports = { UpdateManager, compareVersions, validateManifest, parseGithubRelease, downloadResponseToFile, GITHUB_RELEASE_API, MAX_UPDATE_BYTES };

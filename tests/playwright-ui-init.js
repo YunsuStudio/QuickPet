@@ -15,7 +15,11 @@ async (page) => {
       notifications: [],
       companions: [],
       commands: [],
-      shortcutHotkeyStatuses: [],
+      hotkeyRegistrations: {},
+      runtime: {
+        globalShortcutRegistrations: { search: true, launcher: true },
+        update: { status: 'idle', currentVersion: '0.11.21' }
+      },
       petStatus: { name: 'Nuan Nuan', mood: 82, hunger: 76, affection: 20 },
       settings: {
         theme: 'system',
@@ -42,11 +46,11 @@ async (page) => {
         edgeSnap: true,
         activityPadding: 10,
         globalSearchShortcut: 'Alt+Space',
+        quickLaunchShortcut: 'CommandOrControl+Alt+Space',
         clipboardMonitor: true,
         launchAtLogin: false,
         autoCheckUpdates: true,
         portableCacheCleanupPrompt: true,
-        updateFeedUrl: '',
         sortBy: 'recent'
       }
     };

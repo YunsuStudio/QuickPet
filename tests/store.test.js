@@ -19,15 +19,15 @@ function withStore(callback) {
 test('添加快捷方式时自动分类并持久化', () => withStore((store) => {
   const item = store.addShortcut({ target: 'https://github.com/openai', name: '代码仓库' });
   assert.equal(item.type, 'website');
-  assert.equal(item.category, 'develop');
+  assert.equal(item.category, 'work');
   assert.equal(store.snapshot().shortcuts.length, 1);
   assert.equal(fs.existsSync(store.filePath), true);
 }));
 
 test('智能规则会覆盖自动分类并追加标签', () => withStore((store) => {
-  store.addRule({ name: '设计文件', field: 'extension', operator: 'equals', value: 'psd', category: 'design', tags: ['设计素材'] });
+  store.addRule({ name: '设计文件', field: 'extension', operator: 'equals', value: 'psd', category: 'work', tags: ['设计素材'] });
   const item = store.addShortcut({ target: 'C:\\Work\\poster.psd' });
-  assert.equal(item.category, 'design');
+  assert.equal(item.category, 'work');
   assert.deepEqual(item.tags, ['设计素材']);
 }));
 
@@ -60,6 +60,11 @@ test('快捷启动组合键会规范化并拒绝冲突', () => withStore((store)
   assert.throws(() => store.addShortcut({ target: 'https://example.com/hotkey-two', hotkey: 'Shift+Ctrl+K' }), /已经被占用/);
   assert.throws(() => store.updateShortcut(first.id, { hotkey: 'Alt+F4' }), /需要包含/);
   assert.throws(() => store.updateShortcut(first.id, { hotkey: store.data.settings.globalSearchShortcut }), /已经被占用/);
+  assert.throws(() => store.updateShortcut(first.id, { hotkey: store.data.settings.quickLaunchShortcut }), /已经被占用/);
+  assert.throws(() => store.updateSettings({ quickLaunchShortcut: store.data.settings.globalSearchShortcut }), /不能相同/);
+  const settings = store.updateSettings({ globalSearchShortcut: 'Ctrl+Shift+F8', quickLaunchShortcut: 'Alt+F9' });
+  assert.equal(settings.globalSearchShortcut, 'CommandOrControl+Shift+F8');
+  assert.equal(settings.quickLaunchShortcut, 'Alt+F9');
 }));
 
 test('自定义分类删除后项目回到其他', () => withStore((store) => {
@@ -80,14 +85,44 @@ test('分类支持嵌套并拒绝形成循环', () => withStore((store) => {
 }));
 
 test('快捷方式支持同类排序和跨分类拖动', () => withStore((store) => {
-  const first = store.addShortcut({ target: 'https://example.com/first', category: 'develop' });
-  const second = store.addShortcut({ target: 'https://example.com/second', category: 'develop' });
-  store.reorderShortcut(second.id, first.id, 'develop');
-  let ordered = store.data.shortcuts.filter((item) => item.category === 'develop').sort((a, b) => a.sortOrder - b.sortOrder);
+  const first = store.addShortcut({ target: 'https://example.com/first', category: 'work' });
+  const second = store.addShortcut({ target: 'https://example.com/second', category: 'work' });
+  store.reorderShortcut(second.id, first.id, 'work');
+  let ordered = store.data.shortcuts.filter((item) => item.category === 'work').sort((a, b) => a.sortOrder - b.sortOrder);
   assert.deepEqual(ordered.map((item) => item.id), [second.id, first.id]);
-  store.reorderShortcut(first.id, '', 'design');
-  ordered = store.data.shortcuts.filter((item) => item.category === 'design').sort((a, b) => a.sortOrder - b.sortOrder);
+  store.reorderShortcut(first.id, '', 'tools');
+  ordered = store.data.shortcuts.filter((item) => item.category === 'tools').sort((a, b) => a.sortOrder - b.sortOrder);
   assert.deepEqual(ordered.map((item) => item.id), [first.id]);
+}));
+
+test('可以一次清空全部快捷方式', () => withStore((store) => {
+  store.addShortcut({ target: 'https://example.com/one' });
+  store.addShortcut({ target: 'https://example.com/two' });
+  assert.equal(store.removeAllShortcuts(), 2);
+  assert.equal(store.data.shortcuts.length, 0);
+  assert.equal(new Store(store.filePath).data.shortcuts.length, 0);
+}));
+
+test('旧版内置分类会迁移且保留用户自定义分类', () => withStore((store) => {
+  const data = store.replaceData({
+    categories: [
+      { id: 'work', name: '工作', icon: '💼', color: '#6c7cff' },
+      { id: 'design', name: '设计', icon: '🎨', color: '#f38bb3' },
+      { id: 'develop', name: '我的开发', icon: 'D', color: '#123456' },
+      { id: 'social', name: '社交', icon: '💬', color: '#57a8ef' },
+      { id: 'life', name: '生活', icon: '🌿', color: '#72bd69' },
+      { id: 'other', name: '其他', icon: '✨', color: '#9aa0b5' }
+    ],
+    shortcuts: [
+      { target: 'C:\\Art\\poster.psd', category: 'design' },
+      { target: 'C:\\Code\\app.exe', category: 'develop' },
+      { target: 'https://weibo.com', category: 'social' }
+    ]
+  });
+  assert.equal(data.categories.some((item) => item.id === 'design'), false);
+  assert.equal(data.categories.some((item) => item.id === 'social'), false);
+  assert.equal(data.categories.some((item) => item.id === 'develop' && item.name === '我的开发'), true);
+  assert.deepEqual(data.shortcuts.map((item) => item.category), ['work', 'develop', 'life']);
 }));
 
 test('设置数值和桌宠模式会被限制在安全范围内', () => withStore((store) => {

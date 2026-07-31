@@ -9,8 +9,15 @@
 </head>
 <body>
   <main class="search-shell">
-    <label class="search-input-wrap"><span>⌕</span><input id="globalSearchInput" autocomplete="off" placeholder="搜索快捷方式或命令"></label>
-    <div class="search-meta"><span id="searchHint">全部快捷项目</span></div>
+    <header class="search-header">
+      <div class="search-brand"><i>☯</i><span><b id="windowTitle">快捷搜索</b><small>快捷宠</small></span></div>
+      <div class="mode-switch" role="tablist" aria-label="窗口模式">
+        <button class="active" data-mode="search" role="tab">⌕ <span>搜索</span></button>
+        <button data-mode="launcher" role="tab">▦ <span>启动台</span></button>
+      </div>
+    </header>
+    <label id="searchInputWrap" class="search-input-wrap"><span>⌕</span><input id="globalSearchInput" autocomplete="off" placeholder="搜索名称、标签、路径或命令"></label>
+    <div class="search-meta"><span id="searchHint">全部快捷项目</span><b id="shortcutHint"></b></div>
     <section id="globalSearchResults" class="search-results"></section>
   </main>
   <script src="search.js"></script>
