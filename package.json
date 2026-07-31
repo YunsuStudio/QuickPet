@@ -41,6 +41,7 @@
     "files": [
       "src/**/*",
       "assets/**/*",
+      "LICENSE",
       "THIRD_PARTY_NOTICES.md",
       "package.json"
     ],
