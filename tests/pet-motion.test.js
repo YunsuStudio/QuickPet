@@ -92,7 +92,7 @@ test('饥饿状态不会打断已经开始的散步', () => {
       getAllDisplays: () => [display]
     }
   });
-  controller.baseY = 500;
+  controller.syncToWindow();
   controller.engine.mode = 'walk';
   controller.engine.direction = 1;
   controller.engine.phaseEndsAt = now + 5000;
@@ -124,7 +124,7 @@ test('主快捷面板可见时桌宠仍会继续散步', () => {
       getAllDisplays: () => [display]
     }
   });
-  controller.baseY = 500;
+  controller.syncToWindow();
   controller.engine.mode = 'walk';
   controller.engine.direction = 1;
   controller.engine.phaseEndsAt = now + 5000;
@@ -238,4 +238,45 @@ test('cross-screen walking does not snap to an internal display seam', () => {
 
   assert.equal(controller.snapToEdge(), false);
   assert.equal(requests.length, 0);
+});
+
+test('large-to-small display transition ignores transient DPI seam coordinate feedback', () => {
+  let requestedBounds = { x: -6, y: 760, width: 190, height: 230 };
+  const requestedX = [];
+  const leftDisplay = { workArea: { x: -2560, y: 0, width: 2560, height: 1440 } };
+  const rightDisplay = { workArea: { x: 0, y: 0, width: 1280, height: 960 } };
+  const window = {
+    isDestroyed: () => false,
+    isVisible: () => true,
+    getBounds: () => ({
+      ...requestedBounds,
+      x: requestedBounds.x >= -2 && requestedBounds.x <= 8 ? -6 : requestedBounds.x
+    }),
+    setBounds: (next) => {
+      requestedBounds = { ...next };
+      requestedX.push(next.x);
+    },
+    webContents: { send: () => {} }
+  };
+  const controller = new PetMotionController({
+    getWindow: () => window,
+    getSettings: () => ({ autoWalk: true, naturalBehavior: false, nightSleep: false, petWalkSpeed: 110, petScreenMode: 'all', activityPadding: 0 }),
+    screen: {
+      getCursorScreenPoint: () => ({ x: 500, y: 500 }),
+      getDisplayMatching: (bounds) => bounds.x < 0 ? leftDisplay : rightDisplay,
+      getAllDisplays: () => [leftDisplay, rightDisplay]
+    }
+  });
+  controller.baseY = 760;
+  controller.engine.setBounds(-2560, 1090, -6);
+  controller.engine.mode = 'walk';
+  controller.engine.direction = 1;
+  controller.engine.phaseEndsAt = Date.now() + 5000;
+
+  for (let index = 0; index < 3; index += 1) {
+    controller.engine.lastTickAt = Date.now() - 120;
+    controller.tick();
+  }
+
+  assert.ok(requestedX.at(-1) > 10, `expected to clear the seam, got ${requestedX.join(', ')}`);
 });

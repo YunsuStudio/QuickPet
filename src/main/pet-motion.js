@@ -212,7 +212,7 @@ class PetMotionController {
     const displays = settings.petScreenMode === 'all' ? this.screen.getAllDisplays() : [this.screen.getDisplayMatching(bounds)];
     const minimum = Math.min(...displays.map((display) => display.workArea.x)) + padding;
     const maximum = Math.max(...displays.map((display) => display.workArea.x + display.workArea.width)) - bounds.width - padding;
-    this.engine.setBounds(minimum, maximum, bounds.x);
+    this.engine.setBounds(minimum, maximum);
     const display = this.screen.getDisplayMatching(bounds);
     if (this.baseY === null) this.baseY = bounds.y;
     this.baseY = Math.min(display.workArea.y + display.workArea.height - bounds.height - padding, Math.max(display.workArea.y + padding, this.baseY));

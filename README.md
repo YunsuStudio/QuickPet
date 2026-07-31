@@ -10,8 +10,8 @@
 
 <p>
   <img alt="Windows 10 和 11 x64" src="https://img.shields.io/badge/Windows-10%20%7C%2011%20x64-111111?style=flat-square&logo=windows&logoColor=white">
-  <img alt="版本 0.12.1" src="https://img.shields.io/badge/version-0.12.1-111111?style=flat-square">
-  <img alt="101 项测试通过" src="https://img.shields.io/badge/tests-101%20passed-111111?style=flat-square">
+  <img alt="版本 0.12.2" src="https://img.shields.io/badge/version-0.12.2-111111?style=flat-square">
+  <img alt="102 项测试通过" src="https://img.shields.io/badge/tests-102%20passed-111111?style=flat-square">
   <img alt="MIT 许可" src="https://img.shields.io/badge/license-MIT-111111?style=flat-square">
   <a href="https://github.com/YunsuStudio/QuickPet/actions/workflows/ci.yml"><img alt="CI 状态" src="https://github.com/YunsuStudio/QuickPet/actions/workflows/ci.yml/badge.svg"></a>
 </p>
@@ -31,7 +31,7 @@
 | 项目 | 说明 |
 | --- | --- |
 | 支持系统 | Windows 10 / 11 x64 |
-| 当前文件 | `QuickPet-Portable-0.12.1-x64.exe` |
+| 当前文件 | `QuickPet-Portable-0.12.2-x64.exe` |
 | 安装方式 | 无需安装，不自动创建快捷方式 |
 | 首次运行 | 在 EXE 同目录创建 `QuickPet-Portable-Cache` |
 | 数据位置 | 默认保存在本机，可备份和完整迁移 |
@@ -117,11 +117,11 @@ npm test
 npm run build
 ```
 
-构建产物位于 `dist/QuickPet-Portable-0.12.1-x64.exe`。项目不会生成 NSIS、IExpress 或其他安装包。
+构建产物位于 `dist/QuickPet-Portable-0.12.2-x64.exe`。项目不会生成 NSIS、IExpress 或其他安装包。
 
 ## 测试状态
 
-当前 101 项自动测试全部通过，覆盖三分类迁移、协议启动、搜索、启动台、组合键、桌宠投喂与拖动、透明区域点击、模型导入、备份恢复、便携缓存和双屏边界等主要流程。
+当前 102 项自动测试全部通过，覆盖三分类迁移、协议启动、搜索、启动台、组合键、桌宠投喂与拖动、透明区域点击、模型导入、备份恢复、便携缓存和不同 DPI 双屏接缝等主要流程。
 
 性能记录：CPU `0.68%`、峰值内存 `332.6 MB`、3D 空闲帧率 `30.08 FPS`。
 
