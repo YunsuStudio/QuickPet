@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="./assets/app-icon.png" alt="QuickPet 太极猫图标" width="128" height="128">
+
 # 快捷宠 QuickPet
 
 **把快捷方式交给一只会走路的桌宠。**
