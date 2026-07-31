@@ -42,6 +42,8 @@ using System.Windows.Forms;
 [assembly: AssemblyTitle("Quick Pet Portable")]
 [assembly: AssemblyProduct("Quick Pet Portable")]
 [assembly: AssemblyDescription("Portable launcher for Quick Pet")]
+[assembly: AssemblyCompany("\u4e91\u95f4\u6eaf\u5de5\u4f5c\u5ba4")]
+[assembly: AssemblyCopyright("Copyright \u00a9 2026 \u4e91\u95f4\u6eaf\u5de5\u4f5c\u5ba4")]
 [assembly: AssemblyVersion("$numericVersion")]
 [assembly: AssemblyFileVersion("$numericVersion")]
 
@@ -112,8 +114,8 @@ internal static class PortableLauncher
                 return 1;
             }
             MessageBox.Show(
-                "快捷宠便携版无法启动。\r\n\r\n请把便携 EXE 移动到桌面或其他有写入权限的文件夹。\r\n运行文件会解压到 EXE 旁的 QuickPet-Portable-Cache。\r\n诊断日志位于 EXE 同目录，目录不可写时位于本机 AppData\\Local\\QuickPet。\r\n\r\n" + error.Message,
-                "快捷宠便携版",
+                "\u5feb\u6377\u5ba0\u4fbf\u643a\u7248\u65e0\u6cd5\u542f\u52a8\u3002\r\n\r\n\u8bf7\u628a\u4fbf\u643a EXE \u79fb\u52a8\u5230\u684c\u9762\u6216\u5176\u4ed6\u6709\u5199\u5165\u6743\u9650\u7684\u6587\u4ef6\u5939\u3002\r\n\u8fd0\u884c\u6587\u4ef6\u4f1a\u89e3\u538b\u5230 EXE \u65c1\u7684 QuickPet-Portable-Cache\u3002\r\n\u8bca\u65ad\u65e5\u5fd7\u4f4d\u4e8e EXE \u540c\u76ee\u5f55\uff0c\u76ee\u5f55\u4e0d\u53ef\u5199\u65f6\u4f4d\u4e8e\u672c\u673a AppData\\Local\\QuickPet\u3002\r\n\r\n" + error.Message,
+                "\u5feb\u6377\u5ba0\u4fbf\u643a\u7248",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
             return 1;
@@ -501,6 +503,7 @@ internal static class PortableLauncher
   )
   $compilerArguments = @(
     '/nologo',
+    '/codepage:65001',
     '/target:winexe',
     '/platform:x64',
     '/optimize+',

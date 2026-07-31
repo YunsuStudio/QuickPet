@@ -5,6 +5,13 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
+test('便携启动器使用跨 PowerShell 版本安全的工作室署名', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'create-portable-launcher.ps1'), 'utf8');
+  assert.doesNotMatch(source, /[^\x00-\x7f]/);
+  assert.match(source, /AssemblyCompany\("\\u4e91\\u95f4\\u6eaf\\u5de5\\u4f5c\\u5ba4"\)/);
+  assert.match(source, /AssemblyCopyright\("Copyright \\u00a9 2026 \\u4e91\\u95f4\\u6eaf\\u5de5\\u4f5c\\u5ba4"\)/);
+});
+
 test('便携版把运行文件解压到 EXE 同级目录并传递缓存根路径', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'create-portable-launcher.ps1'), 'utf8');
   assert.match(source, /Path\.GetDirectoryName\(Application\.ExecutablePath\)/);
