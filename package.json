@@ -1,6 +1,6 @@
 {
   "name": "quick-pet",
-  "version": "0.11.17",
+  "version": "0.11.18",
   "description": "可自定义的 Windows 桌宠快捷收纳器",
   "main": "src/main/main.js",
   "author": "Quick Pet",
@@ -14,9 +14,8 @@
     "bundle:live2d": "node scripts/copy-live2d-runtime.js && esbuild src/renderer/pet-live2d-entry.js --bundle --format=iife --global-name=QuickPetLive2DBundle --outfile=src/renderer/vendor/pet-live2d.bundle.js --minify",
     "bundle:renderers": "npm run bundle:3d && npm run bundle:live2d",
     "pack": "npm run bundle:renderers && electron-builder --dir && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-packaged-launch.ps1",
-    "build:local-exe": "npm run pack && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-iexpress-installer.ps1",
     "build:portable": "npm run pack && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-portable-launcher.ps1",
-    "build": "npm run pack && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-iexpress-installer.ps1 && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-portable-launcher.ps1"
+    "build": "npm run build:portable"
   },
   "devDependencies": {
     "@hazart-pkg/live2d-core": "^1.0.1",
@@ -49,27 +48,12 @@
       "icon": "assets/app-icon.ico",
       "target": [
         {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
           "target": "portable",
           "arch": [
             "x64"
           ]
         }
       ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "快捷宠",
-      "uninstallDisplayName": "快捷宠",
-      "artifactName": "${productName}-Setup-${version}-${arch}.${ext}"
     },
     "portable": {
       "artifactName": "${productName}-Portable-${version}-${arch}.${ext}"

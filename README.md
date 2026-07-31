@@ -1,5 +1,10 @@
 # 快捷宠
 
+## 0.11.18 调整
+
+- 项目改为只发布单文件便携版，移除 NSIS、IExpress 安装包和安装器构建入口
+- `npm run build` 现在只生成 `QuickPet-Portable-0.11.18-x64.exe`
+
 ## 0.11.17 修复
 
 - 旧缓存删除改为独立进程；超时会终止并等待删除进程退出，不再出现界面已报超时但后台仍继续删除
@@ -107,7 +112,7 @@
 - 系统托盘、开机启动、每日自动备份、损坏恢复和手动导入导出
 - 多显示器活动范围、全屏应用自动隐藏、屏幕边缘吸附和边缘留白
 - 数据完全保存在本机
-- 完整换机迁移、便携缓存清理、异常恢复与可选数据卸载
+- 完整换机迁移、便携缓存清理和异常恢复
 
 ## 运行
 
@@ -124,25 +129,13 @@ npm start
 npm test
 ```
 
-## 打包 Windows 安装程序
+## 打包 Windows 便携版
 
 ```powershell
 npm run build
 ```
 
-网络受限时，可使用 Windows 自带 IExpress 生成单文件安装器：
-
-```powershell
-npm run build:local-exe
-```
-
-生成无需安装、无需手动解压的单文件便携版：
-
-```powershell
-npm run build:portable
-```
-
-安装包和便携版会生成到 `dist` 文件夹。本地安装器首次运行会安装到当前用户的 `%LOCALAPPDATA%\Programs\QuickPet`，并创建桌面与开始菜单快捷方式。便携版不安装、不创建快捷方式，首次启动会在 EXE 旁的 `QuickPet-Portable-Cache` 中准备运行文件，之后直接双击同一个 EXE 即可。新版会识别旧 `%TEMP%` 缓存，并可在设置页确认清理。
+只会在 `dist` 文件夹生成单文件便携版。它不安装、不创建快捷方式，首次启动会在 EXE 旁的 `QuickPet-Portable-Cache` 中准备运行文件，之后直接双击同一个 EXE 即可。新版会识别旧 `%TEMP%` 缓存，并可在设置页确认清理。
 
 ## 基本操作
 
