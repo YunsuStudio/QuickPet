@@ -27,6 +27,7 @@ const elements = {
   hotkeyInput: $('#hotkeyInput'),
   tagsInput: $('#tagsInput'),
   favoriteInput: $('#favoriteInput'),
+  launcherInput: $('#launcherInput'),
   toast: $('#toast'),
   dropOverlay: $('#dropOverlay'),
   categoryManager: $('#categoryManager')
@@ -287,6 +288,7 @@ function renderShortcutCard(item) {
       <div class="card-top">
         ${icon}
         <div class="card-actions">
+          <button class="card-icon-button launcher-button ${item.showInLauncher ? 'favorite' : ''}" title="${item.showInLauncher ? '移出快捷启动台' : '加入快捷启动台'}">▦</button>
           <button class="card-icon-button favorite-button ${item.favorite ? 'favorite' : ''}" title="${item.favorite ? '取消收藏' : '收藏'}">★</button>
           <button class="card-icon-button edit-button" title="编辑">✎</button>
           <button class="card-icon-button delete-button" title="删除">×</button>
@@ -360,7 +362,7 @@ function renderCategoryManager() {
       <div class="row-buttons">
         <button data-action="up" title="上移" ${index === 0 ? 'disabled' : ''}>↑</button>
         <button data-action="down" title="下移" ${index === state.categories.length - 1 ? 'disabled' : ''}>↓</button>
-        <button data-action="delete" class="danger" title="删除" ${category.id === 'other' ? 'disabled' : ''}>×</button>
+        <button data-action="delete" class="danger" title="删除" ${['tools', 'study', 'work'].includes(category.id) ? 'disabled' : ''}>×</button>
       </div>
     </div>
   `;
@@ -583,9 +585,11 @@ function renderSettings() {
   $('#portableCacheCleanupPromptInput').checked = settings.portableCacheCleanupPrompt !== false;
   $('#globalSearchShortcutInput').value = formatHotkey(settings.globalSearchShortcut || 'Alt+Space');
   $('#quickLaunchShortcutInput').value = formatHotkey(settings.quickLaunchShortcut || 'CommandOrControl+Alt+Space');
+  $('#panelShortcutInput').value = formatHotkey(settings.panelShortcut || 'CommandOrControl+Shift+Space');
   const registrations = state.runtime?.globalShortcutRegistrations || {};
   $('#globalSearchShortcutStatus').textContent = registrations.search ? '已生效' : '未注册，可能被其他程序占用';
   $('#quickLaunchShortcutStatus').textContent = registrations.launcher ? '已生效' : '未注册，可能被其他程序占用';
+  $('#panelShortcutStatus').textContent = registrations.panel ? '已生效' : '未注册，可能被其他程序占用';
   const is3dMode = settings.petRenderMode === '3d';
   const model = activeCustomModel();
   const modelDisplayName = settings.petModelPreset === 'custom' ? (model?.name || '自定义模型不存在') : '内置动画狐狸';
@@ -752,6 +756,7 @@ function openModal(item = null) {
   elements.hotkeyInput.value = formatHotkey(item?.hotkey || '');
   elements.tagsInput.value = (item?.tags || []).join(', ');
   elements.favoriteInput.checked = Boolean(item?.favorite);
+  elements.launcherInput.checked = Boolean(item?.showInLauncher);
   $('#iconTools').classList.toggle('hidden', !item);
   $('#iconBackgroundInput').value = item?.iconBackground || '#f1efff';
   elements.modal.classList.remove('hidden');
@@ -792,7 +797,8 @@ async function submitShortcut(event) {
     category: elements.categoryInput.value,
     hotkey: elements.hotkeyInput.value,
     tags: elements.tagsInput.value.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean),
-    favorite: elements.favoriteInput.checked
+    favorite: elements.favoriteInput.checked,
+    showInLauncher: elements.launcherInput.checked
   };
   try {
     if (elements.editId.value) {
@@ -906,6 +912,7 @@ function bindLibraryActions() {
     if (!item) return;
     try {
       if (event.target.closest('.shortcut-open')) await window.quickPet.openShortcut(item.id);
+      else if (event.target.closest('.launcher-button')) await window.quickPet.updateShortcut(item.id, { showInLauncher: !item.showInLauncher });
       else if (event.target.closest('.favorite-button')) await window.quickPet.updateShortcut(item.id, { favorite: !item.favorite });
       else if (event.target.closest('.edit-button')) openModal(item);
       else if (event.target.closest('.delete-button')) {
@@ -950,7 +957,7 @@ function bindLibraryActions() {
     const targetItem = state.shortcuts.find((item) => item.id === targetCard?.dataset.id);
     const category = targetItem?.category || (state.categories.some((item) => item.id === currentView) ? currentView : state.shortcuts.find((item) => item.id === draggedShortcutId)?.category);
     await window.quickPet.updateSettings({ sortBy: 'manual' });
-    await window.quickPet.reorderShortcut(draggedShortcutId, targetCard?.dataset.id || '', category || 'other');
+    await window.quickPet.reorderShortcut(draggedShortcutId, targetCard?.dataset.id || '', category || 'tools');
   });
   elements.shortcutGrid.addEventListener('dragend', () => {
     draggedShortcutId = '';
@@ -1106,6 +1113,7 @@ function bindSettings() {
   };
   bindSettingsHotkey('#globalSearchShortcutInput', '#clearGlobalSearchShortcutButton', 'globalSearchShortcut', 'Alt+Space', '快捷搜索组合键');
   bindSettingsHotkey('#quickLaunchShortcutInput', '#clearQuickLaunchShortcutButton', 'quickLaunchShortcut', 'CommandOrControl+Alt+Space', '快捷启动台组合键');
+  bindSettingsHotkey('#panelShortcutInput', '#clearPanelShortcutButton', 'panelShortcut', 'CommandOrControl+Shift+Space', '主快捷面板组合键');
   $('#petRenderModeSelect').addEventListener('change', async () => {
     await window.quickPet.updateSettings({ petRenderMode: $('#petRenderModeSelect').value });
     showToast($('#petRenderModeSelect').value === '3d' ? '已经切换为 3D 动态动物' : '已经切换为 2D 自定义皮肤');

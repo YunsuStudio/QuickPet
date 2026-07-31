@@ -157,7 +157,7 @@ select:focus-visible {
   gap: 8px;
   color: var(--chrome-muted);
   font-size: 11px;
-  transition: transform var(--motion-base) var(--ease-out);
+  transition: opacity var(--motion-fast) var(--ease-out);
 }
 .nav-item span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-item span:first-child { font-size: 13px; }
@@ -169,8 +169,8 @@ select:focus-visible {
   color: var(--chrome-muted);
   font-size: 9px;
 }
-.nav-item:hover { background: var(--chrome-2); color: var(--chrome-text); transform: translateX(2px); }
-.nav-item:active { transform: translateX(1px) scale(.985); }
+.nav-item:hover { background: var(--chrome-2); color: var(--chrome-text); }
+.nav-item:active { opacity: .72; }
 .nav-item.active {
   position: relative;
   background: var(--chrome-active);
@@ -201,9 +201,8 @@ h1 { font-family: "KaiTi", "Microsoft YaHei UI", sans-serif; font-size: 24px; fo
   border-radius: 7px;
   background: var(--surface);
   box-shadow: 0 1px 1px rgba(31, 39, 51, .03);
-  transition: transform var(--motion-base) var(--ease-out);
+  transition: opacity var(--motion-fast) var(--ease-out);
 }
-.search-box:focus-within { transform: translateY(-1px); }
 .search-box:focus-within { border-color: var(--action); box-shadow: 0 0 0 2px color-mix(in srgb, var(--action) 14%, transparent); }
 .select-control,
 .text-control {
@@ -228,7 +227,7 @@ h1 { font-family: "KaiTi", "Microsoft YaHei UI", sans-serif; font-size: 24px; fo
   transition: transform var(--motion-fast) var(--ease-out), opacity var(--motion-fast) var(--ease-out);
 }
 .primary-button { border: 1px solid var(--action); background: var(--action); color: var(--action-text); }
-.primary-button:hover { transform: translateY(-1px); background: color-mix(in srgb, var(--action) 82%, var(--surface)); border-color: var(--action); filter: none; }
+.primary-button:hover { background: color-mix(in srgb, var(--action) 82%, var(--surface)); border-color: var(--action); filter: none; }
 .secondary-button { border: 1px solid var(--text); background: var(--surface); color: var(--text); }
 .secondary-button:hover { background: var(--action-soft); border-color: var(--text); }
 .ghost-button { background: transparent; }
@@ -254,19 +253,17 @@ h1 { font-family: "KaiTi", "Microsoft YaHei UI", sans-serif; font-size: 24px; fo
   transition: transform var(--motion-base) var(--ease-out), opacity var(--motion-fast) var(--ease-out);
 }
 .shortcut-card:hover {
-  transform: translateY(-3px);
+  transform: translateY(-1px);
   border-color: var(--text);
   border-top-color: var(--text);
-  box-shadow: 0 7px 18px rgba(0, 0, 0, .1);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, .07);
 }
 .shortcut-card:active { transform: translateY(-1px) scale(.99); }
 .shortcut-card.drag-before { box-shadow: inset 3px 0 0 var(--action); }
 .shortcut-icon { width: 38px; height: 38px; flex-basis: 38px; border: 1px solid var(--border); border-radius: 50%; background: var(--surface-2); color: var(--text); font-size: 18px; }
 .shortcut-icon img { width: 24px; height: 24px; }
 .card-actions { gap: 2px; }
-.card-icon-button { width: 26px; height: 26px; border-radius: 5px; transform: translateY(3px); transition: transform var(--motion-base) var(--ease-out), opacity var(--motion-fast) var(--ease-out); }
-.shortcut-card:hover .card-icon-button,
-.card-icon-button.favorite { transform: translateY(0); }
+.card-icon-button { width: 26px; height: 26px; border-radius: 5px; transition: transform var(--motion-fast) var(--ease-out), opacity var(--motion-fast) var(--ease-out); }
 .card-icon-button:active { transform: scale(.9); }
 .card-icon-button.favorite { color: var(--text); }
 .shortcut-open { margin-top: 10px; }
@@ -415,7 +412,7 @@ input[type="range"], input[type="checkbox"] { accent-color: var(--action); }
 .update-source summary { margin-bottom: 8px; color: var(--text-soft); font-size: 9px; cursor: pointer; }
 .update-source .text-control { width: 100%; font-family: "Cascadia Mono", "Consolas", monospace; font-size: 9px; }
 
-.modal-backdrop { background: rgba(19, 24, 30, .58); backdrop-filter: blur(3px); }
+.modal-backdrop { background: rgba(19, 24, 30, .58); }
 .modal-card { padding: 20px; border: 1px solid var(--text); border-radius: 4px; box-shadow: 0 20px 54px rgba(0, 0, 0, .3); }
 .modal-backdrop:not(.hidden) { animation: fadeSettle 160ms var(--ease-out) both; }
 .modal-backdrop:not(.hidden) .modal-card { animation: modalSettle 220ms var(--ease-spring) both; }
@@ -429,7 +426,7 @@ input[type="range"], input[type="checkbox"] { accent-color: var(--action); }
 .inspection-issues .warning { background: color-mix(in srgb, var(--warning) 13%, var(--surface)); color: var(--warning); }
 .inspection-issues .error { background: color-mix(in srgb, var(--danger) 12%, var(--surface)); color: var(--danger); }
 .inspection-issues .success { background: color-mix(in srgb, var(--success) 12%, var(--surface)); color: var(--success); }
-.drop-overlay { top: 42px; left: 198px; background: rgba(20, 26, 34, .76); backdrop-filter: blur(3px); }
+.drop-overlay { top: 42px; left: 198px; background: rgba(20, 26, 34, .84); }
 .drop-overlay > div { border-color: var(--chrome-text); border-radius: 4px; }
 .drop-overlay span { border: 1px solid var(--text); border-radius: 50%; background: var(--surface); color: var(--text); }
 .toast { border-radius: 6px; }
@@ -455,9 +452,11 @@ input[type="range"], input[type="checkbox"] { accent-color: var(--action); }
 }
 
 @keyframes modalSettle {
-  from { opacity: 0; transform: translateY(8px) scale(.985); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
+
+.shortcut-flags { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 20px; }
 
 @media (max-width: 940px) {
   .workspace { grid-template-columns: 176px minmax(0, 1fr); }

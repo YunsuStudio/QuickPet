@@ -115,10 +115,9 @@ class PetMotionEngine {
 }
 
 class PetMotionController {
-  constructor({ getWindow, getSettings, isPanelVisible, screen }) {
+  constructor({ getWindow, getSettings, screen }) {
     this.getWindow = getWindow;
     this.getSettings = getSettings;
-    this.isPanelVisible = isPanelVisible;
     this.screen = screen;
     this.engine = new PetMotionEngine();
     this.timer = null;
@@ -256,7 +255,7 @@ class PetMotionController {
     if (!window || window.isDestroyed() || !window.isVisible()) return 500;
     const settings = this.getSettings();
     const now = Date.now();
-    const enabled = settings.autoWalk !== false && !this.isPanelVisible() && now >= this.pausedUntil;
+    const enabled = settings.autoWalk !== false && now >= this.pausedUntil;
     const bounds = window.getBounds();
     const cursor = this.screen.getCursorScreenPoint();
     if (!this.lastCursorPoint || cursor.x !== this.lastCursorPoint.x || cursor.y !== this.lastCursorPoint.y) {

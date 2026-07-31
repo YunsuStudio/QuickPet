@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 const { normalizeHotkey } = require('./shortcut-hotkeys');
 const { rateModelPerformance } = require('../shared/model-performance');
 const {
+  DEFAULT_CATEGORY_ID,
   DEFAULT_CATEGORIES,
   LEGACY_CATEGORIES,
   classifyShortcut,
@@ -44,6 +45,7 @@ const DEFAULT_SETTINGS = {
   activityPadding: 12,
   globalSearchShortcut: 'Alt+Space',
   quickLaunchShortcut: 'CommandOrControl+Alt+Space',
+  panelShortcut: 'CommandOrControl+Shift+Space',
   clipboardMonitor: true,
   notificationsEnabled: true,
   performanceMode: 'efficient',
@@ -157,14 +159,22 @@ class Store {
       }))
       : base.categories.map((item, index) => ({ ...item, parentId: '', sortOrder: index }));
     const categoryIds = new Set(categories.map((item) => item.id));
-    if (!categoryIds.has('other')) {
-      categories.push({ ...DEFAULT_CATEGORIES.at(-1), parentId: '', sortOrder: categories.length });
-      categoryIds.add('other');
+    for (const defaultCategory of DEFAULT_CATEGORIES) {
+      if (categoryIds.has(defaultCategory.id)) continue;
+      categories.push({ ...defaultCategory, parentId: '', sortOrder: categories.length });
+      categoryIds.add(defaultCategory.id);
     }
     categories.forEach((item, index) => {
       if (!categoryIds.has(item.parentId) || item.parentId === item.id) item.parentId = '';
       if (!Number.isFinite(item.sortOrder)) item.sortOrder = index;
     });
+    const builtInIds = new Set(DEFAULT_CATEGORIES.map((item) => item.id));
+    const orderedCategories = [
+      ...DEFAULT_CATEGORIES.map((defaultCategory) => categories.find((item) => item.id === defaultCategory.id)),
+      ...categories.filter((item) => !builtInIds.has(item.id)).sort((a, b) => a.sortOrder - b.sortOrder)
+    ].filter(Boolean);
+    orderedCategories.forEach((item, index) => { item.sortOrder = index; });
+    categories.splice(0, categories.length, ...orderedCategories);
 
     const rawModels = Array.isArray(input.models) ? input.models : [];
     const models = rawModels.filter((item) => item && item.id && item.fileName).map((item) => {
@@ -218,13 +228,19 @@ class Store {
 
     const status = input.petStatus && typeof input.petStatus === 'object' ? input.petStatus : {};
     const settings = { ...base.settings, ...(input.settings || {}) };
-    settings.globalSearchShortcut = normalizeHotkey(settings.globalSearchShortcut) || DEFAULT_SETTINGS.globalSearchShortcut;
-    settings.quickLaunchShortcut = normalizeHotkey(settings.quickLaunchShortcut) || DEFAULT_SETTINGS.quickLaunchShortcut;
     const existingItemHotkeys = new Set((Array.isArray(input.shortcuts) ? input.shortcuts : []).map((item) => normalizeHotkey(item?.hotkey)).filter(Boolean));
-    if (settings.quickLaunchShortcut === settings.globalSearchShortcut || existingItemHotkeys.has(settings.quickLaunchShortcut)) {
-      settings.quickLaunchShortcut = [DEFAULT_SETTINGS.quickLaunchShortcut, 'CommandOrControl+Shift+Space', 'Alt+F10']
-        .find((hotkey) => hotkey !== settings.globalSearchShortcut && !existingItemHotkeys.has(hotkey)) || 'Alt+F10';
-    }
+    const occupiedHotkeys = new Set(existingItemHotkeys);
+    const resolveGlobalHotkey = (key, candidates) => {
+      const preferred = normalizeHotkey(settings[key]);
+      const next = preferred && !occupiedHotkeys.has(preferred)
+        ? preferred
+        : candidates.map(normalizeHotkey).find((hotkey) => hotkey && !occupiedHotkeys.has(hotkey));
+      settings[key] = next || normalizeHotkey(candidates.at(-1));
+      occupiedHotkeys.add(settings[key]);
+    };
+    resolveGlobalHotkey('globalSearchShortcut', [DEFAULT_SETTINGS.globalSearchShortcut, 'CommandOrControl+Alt+F', 'Alt+F8']);
+    resolveGlobalHotkey('quickLaunchShortcut', [DEFAULT_SETTINGS.quickLaunchShortcut, 'CommandOrControl+Shift+Space', 'Alt+F10']);
+    resolveGlobalHotkey('panelShortcut', [DEFAULT_SETTINGS.panelShortcut, 'CommandOrControl+Shift+P', 'Alt+F11']);
     delete settings.updateFeedUrl;
     settings.petImagePath = cleanAssetReference(settings.petImagePath);
     settings.petOriginalImagePath = cleanAssetReference(settings.petOriginalImagePath);
@@ -240,7 +256,7 @@ class Store {
       field: ['name', 'target', 'type', 'extension'].includes(item.field) ? item.field : 'target',
       operator: ['contains', 'equals', 'starts'].includes(item.operator) ? item.operator : 'contains',
       value: String(item.value).slice(0, 120),
-      category: categoryIds.has(categoryRedirects.get(String(item.category)) || item.category) ? (categoryRedirects.get(String(item.category)) || item.category) : 'other',
+      category: categoryIds.has(categoryRedirects.get(String(item.category)) || item.category) ? (categoryRedirects.get(String(item.category)) || item.category) : DEFAULT_CATEGORY_ID,
       tags: Array.isArray(item.tags) ? item.tags.map(String).filter(Boolean).slice(0, 8) : [],
       enabled: item.enabled !== false
     }));
@@ -258,7 +274,7 @@ class Store {
       id: String(item.id || crypto.randomUUID()),
       name: String(item.name || path.basename(item.path)).slice(0, 80),
       path: path.resolve(String(item.path)),
-      category: categoryIds.has(categoryRedirects.get(String(item.category)) || item.category) ? (categoryRedirects.get(String(item.category)) || item.category) : 'other',
+      category: categoryIds.has(categoryRedirects.get(String(item.category)) || item.category) ? (categoryRedirects.get(String(item.category)) || item.category) : DEFAULT_CATEGORY_ID,
       tags: Array.isArray(item.tags) ? item.tags.map(String).filter(Boolean).slice(0, 8) : ['动态文件夹'],
       enabled: item.enabled !== false
     }));
@@ -289,9 +305,10 @@ class Store {
         name: String(item.name || displayNameFromTarget(item.target)).slice(0, 100),
         target: normalizeTarget(item.target),
         type: inferType(item.target, item.type),
-        category: categoryIds.has(categoryRedirects.get(String(item.category)) || item.category) ? (categoryRedirects.get(String(item.category)) || item.category) : 'other',
+        category: categoryIds.has(categoryRedirects.get(String(item.category)) || item.category) ? (categoryRedirects.get(String(item.category)) || item.category) : DEFAULT_CATEGORY_ID,
         tags: Array.isArray(item.tags) ? item.tags.map(String).slice(0, 12) : [],
         favorite: Boolean(item.favorite),
+        showInLauncher: Boolean(item.showInLauncher),
         createdAt: Number(item.createdAt) || Date.now(),
         updatedAt: Number(item.updatedAt) || Date.now(),
         lastUsedAt: Number(item.lastUsedAt) || 0,
@@ -396,7 +413,7 @@ class Store {
     const matchedRule = this.data.rules.find((rule) => ruleMatches(rule, baseItem));
     const hotkey = normalizeHotkey(input.hotkey);
     if (input.hotkey && !hotkey) throw new Error('组合键需要包含 Ctrl、Alt、Shift 或 Win，并搭配一个按键');
-    if ([this.data.settings.globalSearchShortcut, this.data.settings.quickLaunchShortcut].map(normalizeHotkey).includes(hotkey) || this.data.shortcuts.some((entry) => normalizeHotkey(entry.hotkey) === hotkey && hotkey)) throw new Error('这个组合键已经被占用');
+    if ([this.data.settings.globalSearchShortcut, this.data.settings.quickLaunchShortcut, this.data.settings.panelShortcut].map(normalizeHotkey).includes(hotkey) || this.data.shortcuts.some((entry) => normalizeHotkey(entry.hotkey) === hotkey && hotkey)) throw new Error('这个组合键已经被占用');
     const item = {
       id: crypto.randomUUID(),
       name: String(input.name || displayNameFromTarget(target)).trim().slice(0, 100),
@@ -410,6 +427,7 @@ class Store {
         ...(matchedRule?.tags || [])
       ].map((tag) => String(tag).trim()).filter(Boolean))].slice(0, 12),
       favorite: Boolean(input.favorite),
+      showInLauncher: Boolean(input.showInLauncher),
       createdAt: Date.now(),
       updatedAt: Date.now(),
       lastUsedAt: 0,
@@ -445,6 +463,7 @@ class Store {
     if (typeof changes.category === 'string' && this.data.categories.some((entry) => entry.id === changes.category)) item.category = changes.category;
     if (Array.isArray(changes.tags)) item.tags = changes.tags.map((tag) => String(tag).trim()).filter(Boolean).slice(0, 12);
     if (typeof changes.favorite === 'boolean') item.favorite = changes.favorite;
+    if (typeof changes.showInLauncher === 'boolean') item.showInLauncher = changes.showInLauncher;
     if (typeof changes.iconData === 'string') {
       item.iconData = /^data:image\//.test(changes.iconData) ? changes.iconData.slice(0, 1_500_000) : '';
       item.iconPath = '';
@@ -457,7 +476,7 @@ class Store {
     if (typeof changes.hotkey === 'string') {
       const hotkey = normalizeHotkey(changes.hotkey);
       if (changes.hotkey && !hotkey) throw new Error('组合键需要包含 Ctrl、Alt、Shift 或 Win，并搭配一个按键');
-      if ([this.data.settings.globalSearchShortcut, this.data.settings.quickLaunchShortcut].map(normalizeHotkey).includes(hotkey) || this.data.shortcuts.some((entry) => entry.id !== id && normalizeHotkey(entry.hotkey) === hotkey && hotkey)) throw new Error('这个组合键已经被占用');
+      if ([this.data.settings.globalSearchShortcut, this.data.settings.quickLaunchShortcut, this.data.settings.panelShortcut].map(normalizeHotkey).includes(hotkey) || this.data.shortcuts.some((entry) => entry.id !== id && normalizeHotkey(entry.hotkey) === hotkey && hotkey)) throw new Error('这个组合键已经被占用');
       item.hotkey = hotkey;
     }
     item.updatedAt = Date.now();
@@ -526,14 +545,15 @@ class Store {
 
   updateSettings(changes) {
     const next = { ...this.data.settings, ...changes };
-    for (const key of ['globalSearchShortcut', 'quickLaunchShortcut']) {
+    for (const key of ['globalSearchShortcut', 'quickLaunchShortcut', 'panelShortcut']) {
       if (!Object.hasOwn(changes, key)) continue;
       const hotkey = normalizeHotkey(changes[key]);
       if (!hotkey) throw new Error('组合键需要包含 Ctrl、Alt、Shift 或 Win，并搭配一个按键');
       next[key] = hotkey;
     }
-    if (normalizeHotkey(next.globalSearchShortcut) === normalizeHotkey(next.quickLaunchShortcut)) throw new Error('搜索和启动台的快捷键不能相同');
-    const reserved = new Set([normalizeHotkey(next.globalSearchShortcut), normalizeHotkey(next.quickLaunchShortcut)]);
+    const globalHotkeys = [next.globalSearchShortcut, next.quickLaunchShortcut, next.panelShortcut].map(normalizeHotkey);
+    if (new Set(globalHotkeys).size !== globalHotkeys.length) throw new Error('搜索、启动台和主面板的快捷键不能相同');
+    const reserved = new Set(globalHotkeys);
     if (this.data.shortcuts.some((item) => item.hotkey && reserved.has(normalizeHotkey(item.hotkey)))) throw new Error('这个组合键已经被快捷项目占用');
     for (const [dataKey, pathKey, name] of [
       ['petImageData', 'petImagePath', 'pet-image'],
@@ -825,14 +845,14 @@ class Store {
   }
 
   removeCategory(id) {
-    if (id === 'other') throw new Error('“其他”分类不能删除');
+    if (DEFAULT_CATEGORIES.some((item) => item.id === id)) throw new Error('内置分类不能删除');
     if (!this.data.categories.some((item) => item.id === id)) return false;
     this.data.categories = this.data.categories.filter((item) => item.id !== id);
     for (const category of this.data.categories) {
       if (category.parentId === id) category.parentId = '';
     }
     for (const shortcut of this.data.shortcuts) {
-      if (shortcut.category === id) shortcut.category = 'other';
+      if (shortcut.category === id) shortcut.category = DEFAULT_CATEGORY_ID;
     }
     this.save();
     return true;

@@ -168,9 +168,10 @@
             </article>
 
             <article class="settings-card global-hotkeys-card">
-              <div class="settings-card-heading"><span class="settings-icon">⌕</span><div><h2>全局呼出</h2><p>分别设置搜索与快捷启动台</p></div></div>
+              <div class="settings-card-heading"><span class="settings-icon">⌕</span><div><h2>全局呼出</h2><p>分别设置搜索、启动台与主快捷面板</p></div></div>
               <label class="hotkey-setting"><span>快捷搜索</span><div class="hotkey-recorder"><input id="globalSearchShortcutInput" class="text-control" readonly><button id="clearGlobalSearchShortcutButton" class="ghost-button" type="button" title="恢复默认快捷键">↺</button></div><small id="globalSearchShortcutStatus"></small></label>
               <label class="hotkey-setting"><span>快捷启动台</span><div class="hotkey-recorder"><input id="quickLaunchShortcutInput" class="text-control" readonly><button id="clearQuickLaunchShortcutButton" class="ghost-button" type="button" title="恢复默认快捷键">↺</button></div><small id="quickLaunchShortcutStatus"></small></label>
+              <label class="hotkey-setting"><span>主快捷面板</span><div class="hotkey-recorder"><input id="panelShortcutInput" class="text-control" readonly><button id="clearPanelShortcutButton" class="ghost-button" type="button" title="恢复默认快捷键">↺</button></div><small id="panelShortcutStatus"></small></label>
             </article>
 
             <article class="settings-card settings-card-wide">
@@ -315,7 +316,10 @@
       </div>
       <label class="field"><span>快捷启动组合键</span><div class="hotkey-recorder"><input id="hotkeyInput" class="text-control" readonly placeholder="未设置"><button id="clearHotkeyButton" class="ghost-button" type="button" title="清除组合键">×</button></div></label>
       <label class="field"><span>标签</span><input id="tagsInput" class="text-control" placeholder="用逗号分隔，例如：常用, 灵感"></label>
-      <label class="favorite-check"><input id="favoriteInput" type="checkbox"><span>加入收藏</span></label>
+      <div class="shortcut-flags">
+        <label class="favorite-check"><input id="favoriteInput" type="checkbox"><span>加入收藏</span></label>
+        <label class="favorite-check"><input id="launcherInput" type="checkbox"><span>加入快捷启动台</span></label>
+      </div>
       <div id="iconTools" class="icon-tools hidden"><span>图标美化</span><button id="refreshIconButton" class="ghost-button" type="button">自动提取</button><button id="chooseIconButton" class="ghost-button" type="button">选择图片</button><button id="clearIconButton" class="ghost-button" type="button">恢复默认</button><input id="iconBackgroundInput" type="color" value="#f1efff" title="图标底色"></div>
       <div class="modal-actions"><button id="cancelButton" type="button" class="ghost-button">取消</button><button class="primary-button" type="submit">保存</button></div>
     </form>

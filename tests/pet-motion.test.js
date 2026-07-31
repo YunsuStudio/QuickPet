@@ -103,6 +103,39 @@ test('饥饿状态不会打断已经开始的散步', () => {
   assert.equal(controller.engine.mode, 'walk');
 });
 
+test('主快捷面板可见时桌宠仍会继续散步', () => {
+  const now = Date.now();
+  let bounds = { x: 100, y: 500, width: 190, height: 230 };
+  const window = {
+    isDestroyed: () => false,
+    isVisible: () => true,
+    getBounds: () => ({ ...bounds }),
+    setBounds: (next) => { bounds = { ...next }; },
+    webContents: { send: () => {} }
+  };
+  const display = { workArea: { x: 0, y: 0, width: 1920, height: 1080 } };
+  const controller = new PetMotionController({
+    getWindow: () => window,
+    getSettings: () => ({ autoWalk: true, naturalBehavior: true, nightSleep: false, petWalkSpeed: 46 }),
+    isPanelVisible: () => true,
+    screen: {
+      getCursorScreenPoint: () => ({ x: 900, y: 500 }),
+      getDisplayMatching: () => display,
+      getAllDisplays: () => [display]
+    }
+  });
+  controller.baseY = 500;
+  controller.engine.mode = 'walk';
+  controller.engine.direction = 1;
+  controller.engine.phaseEndsAt = now + 5000;
+  controller.engine.lastTickAt = now - 100;
+
+  controller.tick();
+
+  assert.ok(bounds.x > 100);
+  assert.equal(controller.engine.mode, 'walk');
+});
+
 test('自然行为更倾向于开始移动而不是长时间停留', () => {
   const engine = new PetMotionEngine(() => 0.3);
   engine.setBounds(0, 300, 150);

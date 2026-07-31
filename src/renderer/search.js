@@ -35,32 +35,34 @@ function renderSearch() {
   const commands = (state.commands || [])
     .filter((item) => (commandMode || query) && (!commandQuery || `${item.name} ${item.detail} ${item.keywords}`.toLowerCase().includes(commandQuery)))
     .map((item) => ({ ...item, kind: 'command' }));
-  const shortcuts = sortedShortcuts()
+  const shortcuts = query ? sortedShortcuts()
     .map((item) => ({ ...item, kind: 'shortcut' }))
     .filter(() => !commandMode)
-    .filter((item) => !query || `${item.name} ${item.target} ${(item.tags || []).join(' ')}`.toLowerCase().includes(query));
+    .filter((item) => `${item.name} ${item.target} ${(item.tags || []).join(' ')}`.toLowerCase().includes(query)) : [];
   visibleItems = [...commands, ...shortcuts].slice(0, 7);
   selectedIndex = Math.min(selectedIndex, Math.max(0, visibleItems.length - 1));
-  hint.textContent = visibleItems.length ? `${visibleItems.length} 个结果${commandMode ? ' · 命令' : ''}` : '没有匹配的项目';
+  hint.textContent = !query ? '输入后开始搜索' : visibleItems.length ? `${visibleItems.length} 个结果${commandMode ? ' · 命令' : ''}` : '没有匹配的项目';
   results.className = 'search-results';
   results.innerHTML = visibleItems.length ? visibleItems.map((item, index) => {
     if (item.kind === 'command') return `<button class="result command-result ${index === selectedIndex ? 'active' : ''}" data-index="${index}"><span class="result-icon">${escapeHtml(item.icon)}</span><span class="result-copy"><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.detail)}</small></span><span class="result-source">命令</span></button>`;
     const category = state.categories.find((entry) => entry.id === item.category);
-    return `<button class="result ${index === selectedIndex ? 'active' : ''}" data-index="${index}"><span class="result-icon">${iconFor(item.type)}</span><span class="result-copy"><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.target)}</small></span><span class="result-source">${escapeHtml(category?.name || '其他')}</span></button>`;
-  }).join('') : '<div class="empty"><i>⌕</i><b>没有找到</b><span>试试名称、标签或路径中的其他文字</span></div>';
+    return `<button class="result ${index === selectedIndex ? 'active' : ''}" data-index="${index}"><span class="result-icon">${iconFor(item.type)}</span><span class="result-copy"><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.target)}</small></span><span class="result-source">${escapeHtml(category?.name || '工具')}</span></button>`;
+  }).join('') : !query
+    ? '<div class="empty search-ready"><i>⌕</i><b>搜索快捷方式</b><span>名称、标签、路径与命令</span></div>'
+    : '<div class="empty"><i>⌕</i><b>没有找到</b><span>试试名称、标签或路径中的其他文字</span></div>';
 }
 
 function renderLauncher() {
-  visibleItems = sortedShortcuts().slice(0, 12).map((item) => ({ ...item, kind: 'shortcut' }));
+  visibleItems = sortedShortcuts().filter((item) => item.showInLauncher || item.favorite).slice(0, 12).map((item) => ({ ...item, kind: 'shortcut' }));
   selectedIndex = Math.min(selectedIndex, Math.max(0, visibleItems.length - 1));
   hint.textContent = visibleItems.length ? `${visibleItems.length} 个常用项目` : '启动台还是空的';
   results.className = 'search-results launcher-grid';
   results.innerHTML = visibleItems.length ? visibleItems.map((item, index) => `
     <button class="launcher-item ${index === selectedIndex ? 'active' : ''}" data-index="${index}">
       <span class="launcher-icon">${iconFor(item.type)}</span>
-      <span><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.favorite ? '收藏' : state.categories.find((entry) => entry.id === item.category)?.name || '其他')}</small></span>
+      <span><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.favorite ? '收藏' : state.categories.find((entry) => entry.id === item.category)?.name || '工具')}</small></span>
       ${item.hotkey ? `<kbd>${escapeHtml(formatHotkey(item.hotkey))}</kbd>` : ''}
-    </button>`).join('') : '<div class="empty launcher-empty"><i>▦</i><b>暂无快捷项目</b><span>在主面板添加后会自动显示在这里</span></div>';
+    </button>`).join('') : '<div class="empty launcher-empty"><i>▦</i><b>启动台为空</b><span>从主面板选择要加入的项目</span></div>';
 }
 
 function render() {

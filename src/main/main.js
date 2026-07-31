@@ -95,6 +95,7 @@ protocol.registerSchemesAsPrivileged([
 ]);
 let registeredSearchShortcut = '';
 let registeredLauncherShortcut = '';
+let registeredPanelShortcut = '';
 let searchWindowMode = 'search';
 let snapTimer;
 let hiddenByFullscreen = false;
@@ -317,21 +318,27 @@ function toggleSearch(force, mode = 'search') {
 function registerSearchShortcut(preferred = 'Alt+Space') {
   if (registeredSearchShortcut) globalShortcut.unregister(registeredSearchShortcut);
   if (registeredLauncherShortcut) globalShortcut.unregister(registeredLauncherShortcut);
+  if (registeredPanelShortcut) globalShortcut.unregister(registeredPanelShortcut);
   registeredSearchShortcut = '';
   registeredLauncherShortcut = '';
+  registeredPanelShortcut = '';
   const searchAccelerator = preferred || store.data.settings.globalSearchShortcut;
   const launcherAccelerator = store.data.settings.quickLaunchShortcut;
+  const panelAccelerator = store.data.settings.panelShortcut;
   try {
     if (searchAccelerator && globalShortcut.register(searchAccelerator, () => toggleSearch(undefined, 'search'))) registeredSearchShortcut = searchAccelerator;
   } catch {}
   try {
     if (launcherAccelerator && launcherAccelerator !== searchAccelerator && globalShortcut.register(launcherAccelerator, () => toggleSearch(undefined, 'launcher'))) registeredLauncherShortcut = launcherAccelerator;
   } catch {}
-  return { search: registeredSearchShortcut, launcher: registeredLauncherShortcut };
+  try {
+    if (panelAccelerator && ![searchAccelerator, launcherAccelerator].includes(panelAccelerator) && globalShortcut.register(panelAccelerator, () => togglePanel(true))) registeredPanelShortcut = panelAccelerator;
+  } catch {}
+  return { search: registeredSearchShortcut, launcher: registeredLauncherShortcut, panel: registeredPanelShortcut };
 }
 
 function syncShortcutHotkeys() {
-  return shortcutHotkeyRegistry?.sync(store.data.shortcuts, [store.data.settings.globalSearchShortcut, store.data.settings.quickLaunchShortcut]) || {};
+  return shortcutHotkeyRegistry?.sync(store.data.shortcuts, [store.data.settings.globalSearchShortcut, store.data.settings.quickLaunchShortcut, store.data.settings.panelShortcut]) || {};
 }
 
 function positionPanel() {
@@ -373,7 +380,8 @@ function applicationState(scope = 'panel') {
       portable: process.env.QUICKPET_PORTABLE === '1',
       globalShortcutRegistrations: {
         search: registeredSearchShortcut === store.data.settings.globalSearchShortcut,
-        launcher: registeredLauncherShortcut === store.data.settings.quickLaunchShortcut
+        launcher: registeredLauncherShortcut === store.data.settings.quickLaunchShortcut,
+        panel: registeredPanelShortcut === store.data.settings.panelShortcut
       },
       update: updateManager?.lastResult || { status: 'idle', currentVersion: app.getVersion() }
     }
@@ -393,7 +401,8 @@ function applicationState(scope = 'panel') {
       categories: snapshot.categories,
       settings: {
         globalSearchShortcut: snapshot.settings.globalSearchShortcut,
-        quickLaunchShortcut: snapshot.settings.quickLaunchShortcut
+        quickLaunchShortcut: snapshot.settings.quickLaunchShortcut,
+        panelShortcut: snapshot.settings.panelShortcut
       },
       ...shared
     };
@@ -638,7 +647,6 @@ function syncCompanionWindows() {
         petWalkSpeed: companion.personality === 'lively' ? 68 : companion.personality === 'sleepy' ? 28 : 44,
         petStatus: store.data.petStatus
       }),
-      isPanelVisible: () => Boolean(panelWindow?.isVisible()),
       screen
     });
     companionWindows.set(companion.id, window);
@@ -924,7 +932,7 @@ function registerIpc() {
     if (senderWindow) endPetWindowDrag(senderWindow);
   });
   ipcMain.handle('panel:toggle', (_event, force) => {
-    motionController?.pauseFor(1800);
+    motionController?.pauseFor(900);
     return togglePanel(force);
   });
   ipcMain.handle('window:hide', () => panelWindow?.hide());
@@ -1065,6 +1073,7 @@ function registerIpc() {
     const previousPanelHeight = store.data.settings.panelHeight;
     const previousSearchShortcut = store.data.settings.globalSearchShortcut;
     const previousLaunchShortcut = store.data.settings.quickLaunchShortcut;
+    const previousPanelShortcut = store.data.settings.panelShortcut;
     const settings = store.updateSettings(changes || {});
     if (Object.hasOwn(changes || {}, 'launchAtLogin')) {
       app.setLoginItemSettings({
@@ -1085,7 +1094,7 @@ function registerIpc() {
     if (panelWindow && (settings.panelWidth !== previousPanelWidth || settings.panelHeight !== previousPanelHeight)) {
       positionPanel();
     }
-    if (settings.globalSearchShortcut !== previousSearchShortcut || settings.quickLaunchShortcut !== previousLaunchShortcut) {
+    if (settings.globalSearchShortcut !== previousSearchShortcut || settings.quickLaunchShortcut !== previousLaunchShortcut || settings.panelShortcut !== previousPanelShortcut) {
       registerSearchShortcut(settings.globalSearchShortcut);
       syncShortcutHotkeys();
     }
@@ -1486,7 +1495,6 @@ if (!gotLock) {
     motionController = new PetMotionController({
       getWindow: () => petWindow,
       getSettings: () => ({ ...store.data.settings, petStatus: store.data.petStatus }),
-      isPanelVisible: () => Boolean(panelWindow?.isVisible()),
       screen
     });
     motionController.start();
@@ -1588,6 +1596,7 @@ if (!gotLock) {
             name: index === 0 ? '一个名称很长但不应该挤坏布局的 Steam 游戏快捷方式' : `快捷项目 ${index + 1}`,
             target: index === 0 ? 'steam://rungameid/730' : `https://example.com/item-${index + 1}`,
             favorite: index < 3,
+            showInLauncher: index === 3,
             hotkey: index === 1 ? 'CommandOrControl+Shift+K' : ''
           }, { persist: false });
         }
@@ -1621,17 +1630,22 @@ if (!gotLock) {
             toggleSearch(true);
             await new Promise((resolve) => setTimeout(resolve, 250));
             const searchScreenshot = await searchWindow.webContents.capturePage();
+            const searchState = await searchWindow.webContents.executeJavaScript(`({ resultCount: document.querySelectorAll('[data-index]').length, emptyText: document.querySelector('.empty')?.textContent || '' })`);
             const searchScreenshotPath = path.join(process.cwd(), 'tests', 'global-search.png');
             fs.writeFileSync(searchScreenshotPath, searchScreenshot.toPNG());
             toggleSearch(true, 'launcher');
             await new Promise((resolve) => setTimeout(resolve, 250));
             const launcherScreenshot = await searchWindow.webContents.capturePage();
+            const launcherState = await searchWindow.webContents.executeJavaScript(`({ resultCount: document.querySelectorAll('.launcher-item').length, names: [...document.querySelectorAll('.launcher-item b')].map((item) => item.textContent) })`);
             const launcherScreenshotPath = path.join(process.cwd(), 'tests', 'quick-launcher.png');
             fs.writeFileSync(launcherScreenshotPath, launcherScreenshot.toPNG());
             console.log(`ui-test panel-bounds=${JSON.stringify(panelWindow.getBounds())}`);
             console.log(`ui-test sidebar-layout=${JSON.stringify(sidebarLayout)}`);
+            console.log(`ui-test search-state=${JSON.stringify(searchState)} launcher-state=${JSON.stringify(launcherState)}`);
             console.log(`ui-test screenshots=${screenshotPath},${hotkeysScreenshotPath},${modelScreenshotPath},${automationScreenshotPath},${searchScreenshotPath},${launcherScreenshotPath}`);
-            exitAutomatedTest(0);
+            const categoryIds = store.data.categories.filter((item) => !item.id.startsWith('custom-')).map((item) => item.id);
+            const panelHotkeyReady = await panelWindow.webContents.executeJavaScript(`document.getElementById('panelShortcutStatus')?.textContent === '已生效'`);
+            exitAutomatedTest(searchState.resultCount === 0 && launcherState.resultCount === 4 && panelHotkeyReady && JSON.stringify(categoryIds) === JSON.stringify(['tools', 'study', 'work']) ? 0 : 6);
           } catch (error) {
             console.error(error.stack || error.message);
             exitAutomatedTest(6);
@@ -1902,7 +1916,9 @@ if (!gotLock) {
               await api.refreshShortcutIcon(local.id);
               await api.clearShortcutIcon(local.id);
               const url = await api.addShortcut({ name: 'Acceptance URL', target: 'https://acceptance.example/test', category: category.id });
-              await api.updateShortcut(url.id, { favorite: true, tags: ['acceptance'], hotkey: 'Control+Alt+Shift+F11' });
+              await api.updateShortcut(url.id, { favorite: true, showInLauncher: true, tags: ['acceptance'], hotkey: 'Control+Alt+Shift+F11' });
+              state = await api.getState();
+              assert(state.shortcuts.find((entry) => entry.id === url.id)?.showInLauncher === true, 'launcher membership');
               await api.reorderShortcut(url.id, local.id, category.id);
               await api.removeShortcut(url.id);
               const checked = await api.checkAll();
@@ -1982,6 +1998,18 @@ if (!gotLock) {
               await api.removeCategory(category.id); mark('cleanup');
               return passed;
             })()`);
+            const feedTarget = 'https://feed.acceptance.example/drop';
+            await petWindow.webContents.executeJavaScript(`(() => {
+              const dataTransfer = new DataTransfer();
+              dataTransfer.setData('text/uri-list', ${JSON.stringify(feedTarget)});
+              document.getElementById('petButton').dispatchEvent(new DragEvent('drop', { dataTransfer, bubbles: true, cancelable: true }));
+            })()`);
+            const feedDeadline = Date.now() + 3000;
+            while (!store.data.shortcuts.some((item) => item.target === feedTarget) && Date.now() < feedDeadline) await new Promise((resolve) => setTimeout(resolve, 25));
+            const fedItem = store.data.shortcuts.find((item) => item.target === feedTarget);
+            if (!fedItem) throw new Error('acceptance failed: pet drop feed');
+            store.removeShortcut(fedItem.id);
+            result.push('pet drop feed');
             console.log(`acceptance-test passed=${result.length} features=${result.join(',')}`);
             exitAutomatedTest(0);
           } catch (error) {

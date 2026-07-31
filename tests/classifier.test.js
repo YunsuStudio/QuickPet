@@ -34,12 +34,12 @@ test('按关键字和扩展名自动分类', () => {
   assert.equal(classifyShortcut({ name: 'GitHub', target: 'https://github.com' }), 'work');
   assert.equal(classifyShortcut({ name: '课程资料', target: 'C:\\Docs\\lesson.pdf' }), 'study');
   assert.equal(classifyShortcut({ name: '配色灵感', target: 'https://example.com/colors' }), 'work');
-  assert.equal(classifyShortcut({ name: '普通项目', target: 'https://example.com' }), 'other');
+  assert.equal(classifyShortcut({ name: '普通项目', target: 'https://example.com' }), 'tools');
   assert.equal(classifyShortcut({ name: '代码片段', target: 'C:\\Work\\index.ts' }), 'work');
-  assert.equal(classifyShortcut({ name: '社交动态', target: 'https://weibo.com' }), 'life');
+  assert.equal(classifyShortcut({ name: '社交动态', target: 'https://weibo.com' }), 'tools');
 });
 
 test('默认分类保持精简且稳定', () => {
   const { DEFAULT_CATEGORIES } = require('../src/shared/classifier');
-  assert.deepEqual(DEFAULT_CATEGORIES.map((item) => item.id), ['work', 'study', 'media', 'tools', 'life', 'other']);
+  assert.deepEqual(DEFAULT_CATEGORIES.map((item) => item.id), ['tools', 'study', 'work']);
 });

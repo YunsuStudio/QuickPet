@@ -61,18 +61,28 @@ test('快捷启动组合键会规范化并拒绝冲突', () => withStore((store)
   assert.throws(() => store.updateShortcut(first.id, { hotkey: 'Alt+F4' }), /需要包含/);
   assert.throws(() => store.updateShortcut(first.id, { hotkey: store.data.settings.globalSearchShortcut }), /已经被占用/);
   assert.throws(() => store.updateShortcut(first.id, { hotkey: store.data.settings.quickLaunchShortcut }), /已经被占用/);
+  assert.throws(() => store.updateShortcut(first.id, { hotkey: store.data.settings.panelShortcut }), /已经被占用/);
   assert.throws(() => store.updateSettings({ quickLaunchShortcut: store.data.settings.globalSearchShortcut }), /不能相同/);
-  const settings = store.updateSettings({ globalSearchShortcut: 'Ctrl+Shift+F8', quickLaunchShortcut: 'Alt+F9' });
+  assert.throws(() => store.updateSettings({ panelShortcut: store.data.settings.quickLaunchShortcut }), /不能相同/);
+  const settings = store.updateSettings({ globalSearchShortcut: 'Ctrl+Shift+F8', quickLaunchShortcut: 'Alt+F9', panelShortcut: 'Ctrl+Alt+P' });
   assert.equal(settings.globalSearchShortcut, 'CommandOrControl+Shift+F8');
   assert.equal(settings.quickLaunchShortcut, 'Alt+F9');
+  assert.equal(settings.panelShortcut, 'CommandOrControl+Alt+P');
 }));
 
-test('自定义分类删除后项目回到其他', () => withStore((store) => {
+test('自定义分类删除后项目回到工具', () => withStore((store) => {
   const category = store.addCategory({ name: '灵感', icon: '💡', color: '#ff9900' });
   const item = store.addShortcut({ target: 'https://example.com/inspire', category: category.id });
   assert.equal(item.category, category.id);
   store.removeCategory(category.id);
-  assert.equal(store.snapshot().shortcuts[0].category, 'other');
+  assert.equal(store.snapshot().shortcuts[0].category, 'tools');
+}));
+
+test('快捷启动台只持久化用户明确加入的项目', () => withStore((store) => {
+  const item = store.addShortcut({ target: 'https://example.com/launcher', showInLauncher: true });
+  assert.equal(item.showInLauncher, true);
+  store.updateShortcut(item.id, { showInLauncher: false });
+  assert.equal(new Store(store.filePath).data.shortcuts[0].showInLauncher, false);
 }));
 
 test('分类支持嵌套并拒绝形成循环', () => withStore((store) => {
@@ -110,19 +120,23 @@ test('旧版内置分类会迁移且保留用户自定义分类', () => withStor
       { id: 'design', name: '设计', icon: '🎨', color: '#f38bb3' },
       { id: 'develop', name: '我的开发', icon: 'D', color: '#123456' },
       { id: 'social', name: '社交', icon: '💬', color: '#57a8ef' },
+      { id: 'media', name: '影音', icon: '🎬', color: '#ff8b61' },
       { id: 'life', name: '生活', icon: '🌿', color: '#72bd69' },
       { id: 'other', name: '其他', icon: '✨', color: '#9aa0b5' }
     ],
     shortcuts: [
       { target: 'C:\\Art\\poster.psd', category: 'design' },
       { target: 'C:\\Code\\app.exe', category: 'develop' },
-      { target: 'https://weibo.com', category: 'social' }
+      { target: 'https://weibo.com', category: 'social' },
+      { target: 'C:\\Media\\song.mp3', category: 'media' },
+      { target: 'https://example.com/misc', category: 'other' }
     ]
   });
   assert.equal(data.categories.some((item) => item.id === 'design'), false);
   assert.equal(data.categories.some((item) => item.id === 'social'), false);
   assert.equal(data.categories.some((item) => item.id === 'develop' && item.name === '我的开发'), true);
-  assert.deepEqual(data.shortcuts.map((item) => item.category), ['work', 'develop', 'life']);
+  assert.deepEqual(data.categories.filter((item) => ['tools', 'study', 'work'].includes(item.id)).map((item) => item.id).sort(), ['study', 'tools', 'work']);
+  assert.deepEqual(data.shortcuts.map((item) => item.category), ['work', 'develop', 'tools', 'tools', 'tools']);
 }));
 
 test('设置数值和桌宠模式会被限制在安全范围内', () => withStore((store) => {

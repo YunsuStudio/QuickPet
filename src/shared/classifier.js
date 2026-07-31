@@ -3,28 +3,30 @@
 const path = require('node:path');
 
 const DEFAULT_CATEGORIES = [
-  { id: 'work', name: '工作', icon: '💼', color: '#6c7cff' },
+  { id: 'tools', name: '工具', icon: '🧰', color: '#5f6368' },
   { id: 'study', name: '学习', icon: '📚', color: '#45b7a8' },
-  { id: 'media', name: '影音', icon: '🎬', color: '#ff8b61' },
-  { id: 'tools', name: '工具', icon: '🧰', color: '#e6a84b' },
-  { id: 'life', name: '生活', icon: '🌿', color: '#72bd69' },
-  { id: 'other', name: '其他', icon: '✨', color: '#9aa0b5' }
+  { id: 'work', name: '工作', icon: '💼', color: '#6c7cff' }
 ];
+
+const DEFAULT_CATEGORY_ID = 'tools';
 
 const LEGACY_CATEGORIES = [
   { id: 'design', name: '设计', icon: '🎨', color: '#f38bb3', destination: 'work' },
   { id: 'develop', name: '开发', icon: '⌨️', color: '#8a76e8', destination: 'work' },
-  { id: 'social', name: '社交', icon: '💬', color: '#57a8ef', destination: 'life' }
+  { id: 'social', name: '社交', icon: '💬', color: '#57a8ef', destination: 'tools' },
+  { id: 'media', name: '影音', icon: '🎬', color: '#ff8b61', destination: 'tools' },
+  { id: 'life', name: '生活', icon: '🌿', color: '#72bd69', destination: 'tools' },
+  { id: 'other', name: '其他', icon: '✨', color: '#9aa0b5', destination: 'tools' }
 ];
 
 const RULES = [
   ['work', ['github', 'gitlab', 'gitee', 'npm', 'developer', 'stackoverflow', 'vscode', 'terminal', 'powershell', 'python', 'java', 'docker', 'api', 'figma', 'dribbble', 'behance', 'canva', 'adobe', 'photoshop', 'illustrator', 'blender', '编程', '代码', '开发', '设计', '图片', '素材', '配色']],
   ['study', ['edu', 'course', 'learn', 'wiki', 'notion', 'obsidian', 'book', 'bilibili.com/video', '学习', '课程', '文档', '教程', '笔记']],
   ['work', ['office', 'docs', 'sheets', 'drive', 'feishu', 'dingtalk', 'work', 'meeting', 'zoom', '腾讯文档', '飞书', '钉钉', '会议', '工作']],
-  ['media', ['youtube', 'bilibili', 'spotify', 'music', 'video', 'netflix', 'iqiyi', 'youku', 'media', '音乐', '视频', '影视', '直播']],
-  ['life', ['weibo', 'wechat', 'qq.com', 'discord', 'telegram', 'reddit', 'twitter', 'x.com', 'facebook', 'instagram', '知乎', '微博', '社交']],
+  ['tools', ['youtube', 'bilibili', 'spotify', 'music', 'video', 'netflix', 'iqiyi', 'youku', 'media', '音乐', '视频', '影视', '直播']],
+  ['tools', ['weibo', 'wechat', 'qq.com', 'discord', 'telegram', 'reddit', 'twitter', 'x.com', 'facebook', 'instagram', '知乎', '微博', '社交']],
   ['tools', ['tool', 'convert', 'translate', 'calculator', 'download', 'utility', '7-zip', 'winrar', 'everything', '工具', '转换', '翻译', '下载']],
-  ['life', ['shop', 'taobao', 'jd.com', 'travel', 'map', 'weather', 'food', 'health', '生活', '购物', '地图', '天气', '美食']]
+  ['tools', ['shop', 'taobao', 'jd.com', 'travel', 'map', 'weather', 'food', 'health', '生活', '购物', '地图', '天气', '美食']]
 ];
 
 const APP_EXTENSIONS = new Set(['.exe', '.lnk', '.bat', '.cmd', '.com', '.msi', '.appref-ms']);
@@ -73,14 +75,14 @@ function classifyShortcut({ name = '', target = '', type = '' }) {
   const extension = path.extname(target).toLowerCase();
 
   if (CODE_EXTENSIONS.has(extension) || DESIGN_EXTENSIONS.has(extension)) return 'work';
-  if (MEDIA_EXTENSIONS.has(extension)) return 'media';
+  if (MEDIA_EXTENSIONS.has(extension)) return 'tools';
   if (STUDY_EXTENSIONS.has(extension)) return 'study';
   if (inferType(target, type) === 'app') return 'tools';
 
   for (const [category, keywords] of RULES) {
     if (keywords.some((keyword) => keywordMatches(haystack, keyword))) return category;
   }
-  return 'other';
+  return DEFAULT_CATEGORY_ID;
 }
 
 function displayNameFromTarget(target = '') {
@@ -105,6 +107,7 @@ function normalizeTarget(target = '') {
 
 module.exports = {
   APP_EXTENSIONS,
+  DEFAULT_CATEGORY_ID,
   DEFAULT_CATEGORIES,
   LEGACY_CATEGORIES,
   classifyShortcut,

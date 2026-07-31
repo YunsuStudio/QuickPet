@@ -24,6 +24,7 @@ let clipboardCandidate = null;
 let clickThrough = null;
 let petDragCandidate = null;
 let suppressPetClick = false;
+let petDropDepth = 0;
 window.__quickPetRenderStats = () => pet3dRenderer?.getStats?.() || petLive2dRenderer?.getStats?.() || null;
 
 function setClickThrough(ignore) {
@@ -35,7 +36,7 @@ function setClickThrough(ignore) {
 
 function updateClickThroughAt(x, y, target = null) {
   if (petDragCandidate) return setClickThrough(false);
-  const overlayOpen = !radialMenu.classList.contains('hidden') || !clipboardBubble.classList.contains('hidden');
+  const overlayOpen = petDropDepth > 0 || !radialMenu.classList.contains('hidden') || !clipboardBubble.classList.contains('hidden');
   const overPet = window.QuickPetHitRegion?.isPetPointInteractive({
     x,
     y,
@@ -96,6 +97,87 @@ function finishPetDrag(event) {
 petButton.addEventListener('pointerup', finishPetDrag);
 petButton.addEventListener('pointercancel', finishPetDrag);
 petButton.addEventListener('lostpointercapture', finishPetDrag);
+
+function hasDroppedContent(dataTransfer) {
+  const types = [...(dataTransfer?.types || [])];
+  return types.includes('Files') || types.includes('text/uri-list') || types.includes('text/plain');
+}
+
+function resetPetDrop() {
+  petDropDepth = 0;
+  petButton.classList.remove('drop-ready');
+}
+
+function showPetDropFeedback(message, success = true) {
+  speechBubble.textContent = message;
+  speechBubble.classList.add('show');
+  petButton.classList.toggle('fed', success);
+  setTimeout(() => {
+    petButton.classList.remove('fed');
+    speechBubble.classList.remove('show');
+    speechBubble.textContent = '点我打开快捷面板';
+  }, 1400);
+}
+
+petButton.addEventListener('dragenter', (event) => {
+  if (!hasDroppedContent(event.dataTransfer)) return;
+  event.preventDefault();
+  petDropDepth += 1;
+  petButton.classList.add('drop-ready');
+  setClickThrough(false);
+});
+
+petButton.addEventListener('dragover', (event) => {
+  if (!hasDroppedContent(event.dataTransfer)) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'copy';
+});
+
+petButton.addEventListener('dragleave', (event) => {
+  event.preventDefault();
+  petDropDepth = Math.max(0, petDropDepth - 1);
+  if (!petDropDepth) petButton.classList.remove('drop-ready');
+});
+
+petButton.addEventListener('drop', async (event) => {
+  if (!hasDroppedContent(event.dataTransfer)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  resetPetDrop();
+  const paths = [...(event.dataTransfer.files || [])]
+    .map((file) => {
+      try { return window.quickPet.pathForFile(file); } catch { return ''; }
+    })
+    .filter(Boolean);
+  const uri = String(event.dataTransfer.getData('text/uri-list') || '')
+    .split(/\r?\n/)
+    .find((line) => line && !line.startsWith('#')) || '';
+  const plain = String(event.dataTransfer.getData('text/plain') || '').trim();
+  const target = uri || (/^(?:www\.|[a-z][a-z0-9+.-]*:)/i.test(plain) ? plain : '');
+  try {
+    let added = 0;
+    let errors = [];
+    if (paths.length) {
+      const result = await window.quickPet.addPaths(paths);
+      added += result.added.length;
+      errors = result.errors;
+    } else if (target) {
+      await window.quickPet.addShortcut({ target });
+      added = 1;
+    }
+    if (!added) throw new Error(errors[0]?.message || '没有识别到可收纳的内容');
+    try { petStatus = await window.quickPet.interactWithPet('feed'); } catch {}
+    const reaction = { ...lastMotion, mode: 'sit', action: 'feed' };
+    pet3dRenderer?.setMotion(reaction);
+    petLive2dRenderer?.setMotion(reaction);
+    showPetDropFeedback(`收好啦 · ${added} 个快捷方式`);
+  } catch (error) {
+    const message = String(error?.message || error || '收纳失败').replace(/^Error invoking remote method '[^']+': Error: /, '');
+    showPetDropFeedback(message, false);
+  } finally {
+    setClickThrough(true);
+  }
+});
 
 async function enable3d() {
   if (pet3dRenderer || enabling3d || threeFailed || !window.QuickPet3DBundle?.mount) return;
