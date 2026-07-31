@@ -60,6 +60,7 @@ class BackupManager {
     const tempPath = `${filePath}.tmp`;
     fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf8');
     fs.renameSync(tempPath, filePath);
+    fs.utimesSync(filePath, now, now);
     this.prune();
     const stats = fs.statSync(filePath);
     return { id, createdAt: stats.mtimeMs, size: stats.size };

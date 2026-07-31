@@ -44,6 +44,8 @@ let modelPreviewRenderer = null;
 let draggedShortcutId = '';
 let backups = [];
 let storageReport = null;
+let cacheCleanupRunning = false;
+let cacheCleanupProgress = null;
 let calendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let reminderFilter = 'all';
 
@@ -430,6 +432,74 @@ function renderUsageStats() {
   list.innerHTML = items.length ? items.map((item) => `<div class="usage-row"><span><b>${escapeHtml(item.name)}</b><small>${item.useCount} 次</small></span><i><em style="width:${Math.max(6, item.useCount / max * 100)}%"></em></i></div>`).join('') : '<p class="empty-inline">打开快捷项目后会在这里生成本地统计。</p>';
 }
 
+function cacheCleanupPresentation(progress = {}) {
+  const index = Math.max(0, Number(progress.index) || 0);
+  const total = Math.max(0, Number(progress.total) || 0);
+  const failedCount = Math.max(0, Number(progress.failedCount) || 0);
+  const skippedCount = Math.max(0, Number(progress.skippedCount) || 0);
+  const itemPercent = total ? Math.round(10 + (Math.min(index, total) / total) * 64) : 74;
+  const name = String(progress.name || '旧版运行文件');
+  const completeStatus = progress.runtimeCacheTimedOut
+    ? '清理结束，Electron 缓存未响应'
+    : failedCount
+      ? `清理结束，${failedCount} 份未能处理`
+      : skippedCount
+        ? `清理结束，已跳过 ${skippedCount} 份`
+        : '缓存清理完成';
+  const completeDetail = failedCount || skippedCount || progress.runtimeCacheTimedOut
+    ? `已释放 ${formatBytes(progress.releasedBytes)} · 未处理内容可稍后重试`
+    : `本次共释放 ${formatBytes(progress.releasedBytes)}`;
+  const presentations = {
+    scan: { percent: 4, status: '正在扫描缓存', detail: '检查旧版运行文件和 Electron 缓存' },
+    'portable-start': { percent: total ? 8 : 74, status: total ? `准备清理 ${total} 份旧版文件` : '没有旧版运行文件', detail: total ? '逐份检查占用状态和访问权限' : '继续处理 Electron 缓存' },
+    'portable-item-start': { percent: Math.max(10, itemPercent - Math.ceil(64 / Math.max(1, total))), status: `正在处理第 ${index}/${total} 份`, detail: name },
+    'portable-item-done': { percent: itemPercent, status: `已清理第 ${index}/${total} 份`, detail: name },
+    'portable-item-skipped': { percent: itemPercent, status: `已跳过第 ${index}/${total} 份`, detail: `${name} · 正在被旧版程序使用` },
+    'portable-item-failed': { percent: itemPercent, status: `第 ${index}/${total} 份未能清理`, detail: `${name} · ${progress.message || '文件被占用或没有权限'}` },
+    'portable-complete': { percent: 76, status: '旧版运行文件处理完成', detail: `已删除 ${progress.removedCount || 0} 份 · 跳过 ${progress.skippedCount || 0} 份 · 失败 ${progress.failedCount || 0} 份` },
+    'runtime-start': { percent: 82, status: '正在清理 Electron 缓存', detail: '清理网页缓存和代码缓存' },
+    'runtime-complete': { percent: 96, status: 'Electron 缓存已清理', detail: `本阶段释放 ${formatBytes(progress.runtimeReleasedBytes)}` },
+    'runtime-timeout': { percent: 96, status: 'Electron 缓存暂时忙碌', detail: '已停止等待，可稍后重新清理' },
+    complete: { percent: 100, status: completeStatus, detail: completeDetail },
+    error: { percent: 100, status: '缓存清理中断', detail: progress.message || '未能完成清理' }
+  };
+  return presentations[progress.stage] || presentations.scan;
+}
+
+function updateMaintenanceButtons() {
+  const clearButton = $('#clearCacheButton');
+  const refreshButton = $('#refreshStorageButton');
+  if (!clearButton || !refreshButton) return;
+  const cleanableBytes = storageReport?.cleanableCacheBytes || 0;
+  const presentation = cacheCleanupPresentation(cacheCleanupProgress || { stage: 'scan' });
+  clearButton.disabled = cacheCleanupRunning || !cleanableBytes;
+  refreshButton.disabled = cacheCleanupRunning;
+  clearButton.textContent = cacheCleanupRunning
+    ? `清理中 · ${presentation.percent}%`
+    : cleanableBytes
+      ? `一键清理缓存 · ${formatBytes(cleanableBytes)}`
+      : '没有可清理缓存';
+}
+
+function renderCacheCleanupProgress() {
+  const container = $('#cacheCleanupProgress');
+  if (!container || !cacheCleanupProgress) return;
+  const presentation = cacheCleanupPresentation(cacheCleanupProgress);
+  container.classList.remove('hidden');
+  container.dataset.stage = cacheCleanupProgress.stage || 'scan';
+  container.dataset.result = cacheCleanupProgress.stage === 'error'
+    ? 'error'
+    : cacheCleanupProgress.stage === 'complete' && (cacheCleanupProgress.failedCount || cacheCleanupProgress.skippedCount || cacheCleanupProgress.runtimeCacheTimedOut)
+      ? 'warning'
+      : 'normal';
+  $('#cacheCleanupStatus').textContent = presentation.status;
+  $('#cacheCleanupPercent').textContent = `${presentation.percent}%`;
+  $('#cacheCleanupBar').style.width = `${presentation.percent}%`;
+  $('#cacheCleanupCurrent').textContent = presentation.detail;
+  $('#cacheCleanupReleased').textContent = `已释放 ${formatBytes(cacheCleanupProgress.releasedBytes)}`;
+  updateMaintenanceButtons();
+}
+
 function renderStorageReport() {
   const report = $('#storageReport');
   if (!storageReport) {
@@ -440,14 +510,12 @@ function renderStorageReport() {
     ['个人数据', storageReport.userDataBytes],
     ['模型文件', storageReport.modelBytes],
     ['本地备份', storageReport.backupBytes],
-    ['便携缓存', storageReport.portableCacheBytes],
-    ['可清理旧版', storageReport.stalePortableCacheBytes]
+    ['当前运行文件', storageReport.currentPortableCacheBytes],
+    ['Electron 缓存', storageReport.runtimeCacheBytes],
+    ['旧版运行文件', storageReport.stalePortableCacheBytes],
+    ['合计可清理', storageReport.cleanableCacheBytes]
   ].map(([label, value]) => `<div><span>${label}</span><b>${formatBytes(value)}</b></div>`).join('');
-  const clearButton = $('#clearCacheButton');
-  clearButton.disabled = !storageReport.stalePortableCacheCount;
-  clearButton.textContent = storageReport.stalePortableCacheCount
-    ? `清理旧版缓存 · ${formatBytes(storageReport.stalePortableCacheBytes)}`
-    : '没有旧版缓存';
+  updateMaintenanceButtons();
   $('#removeProgramButton').textContent = storageReport.portable ? '清理便携运行文件' : '移除快捷宠';
 }
 
@@ -1127,12 +1195,15 @@ function bindSettings() {
   $('#refreshStorageButton').addEventListener('click', () => refreshStorageReport().catch((error) => showToast(cleanError(error), 'error')));
   $('#openDataButton').addEventListener('click', () => window.quickPet.openDataFolder());
   $('#clearCacheButton').addEventListener('click', async () => {
-    const count = storageReport?.stalePortableCacheCount || 0;
-    const bytes = storageReport?.stalePortableCacheBytes || 0;
-    if (!count) return showToast('当前没有旧版便携缓存');
-    if (!confirm(`将删除 ${count} 份旧版运行缓存，预计释放 ${formatBytes(bytes)}。\n个人设置、快捷方式和模型不会被删除。确定继续吗？`)) return;
+    if (cacheCleanupRunning) return;
+    const bytes = storageReport?.cleanableCacheBytes || 0;
+    if (!bytes) return showToast('当前没有可清理缓存');
+    if (!confirm(`将清理 Electron 缓存和旧版运行文件，预计释放 ${formatBytes(bytes)}。\n当前版本运行文件、个人设置、快捷方式和模型不会被删除。确定继续吗？`)) return;
+    cacheCleanupRunning = true;
+    cacheCleanupProgress = { stage: 'scan', releasedBytes: 0 };
+    renderCacheCleanupProgress();
     try {
-      const result = await window.quickPet.clearOldPortableCaches();
+      const result = await window.quickPet.clearRuntimeCache();
       storageReport = result.report;
       renderStorageReport();
       const skipped = result.skippedCount ? `，${result.skippedCount} 份正在使用，已跳过` : '';
@@ -1142,10 +1213,19 @@ function bindSettings() {
         showToast(`清理未完成：${result.failures[0].name} · ${result.failures[0].message}`, 'error');
       } else if (!result.releasedBytes && result.skippedCount) {
         showToast(`有 ${result.skippedCount} 份旧缓存仍在运行，请退出旧版后重试`, 'error');
+      } else if (result.runtimeCacheTimedOut) {
+        showToast(`已释放 ${formatBytes(result.portableReleasedBytes)} 旧版文件；Electron 缓存忙碌，稍后可重试`);
       } else {
-        showToast(`已释放 ${formatBytes(result.releasedBytes)}${skipped}`);
+        showToast(`已释放 ${formatBytes(result.releasedBytes)}（Electron ${formatBytes(result.runtimeReleasedBytes)}，旧版 ${formatBytes(result.portableReleasedBytes)}）${skipped}`);
       }
-    } catch (error) { showToast(cleanError(error), 'error'); }
+    } catch (error) {
+      cacheCleanupProgress = { stage: 'error', message: cleanError(error), releasedBytes: cacheCleanupProgress?.releasedBytes || 0 };
+      renderCacheCleanupProgress();
+      showToast(cleanError(error), 'error');
+    } finally {
+      cacheCleanupRunning = false;
+      updateMaintenanceButtons();
+    }
   });
   $('#exitSafeModeButton').addEventListener('click', async () => { await window.quickPet.exitSafeMode(); showToast('已恢复异常退出前的配置'); });
   $('#removeProgramButton').addEventListener('click', async () => {
@@ -1300,6 +1380,10 @@ async function initialize() {
     bindAutomation();
     bindWindowControls();
     window.quickPet.onStateChanged((nextState) => { state = nextState; renderAll(); });
+    window.quickPet.onCacheCleanupProgress((progress) => {
+      cacheCleanupProgress = progress;
+      renderCacheCleanupProgress();
+    });
     window.quickPet.onNavigateSettings(() => navigate('settings'));
     window.quickPet.onNavigateAutomation(() => navigate('automation'));
     window.quickPet.rendererReady();

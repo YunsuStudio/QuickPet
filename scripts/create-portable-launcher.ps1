@@ -29,6 +29,7 @@ try {
 
   $source = @"
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
@@ -57,6 +58,15 @@ internal static class PortableLauncher
         bool verifyMode = args.Length > 0 && String.Equals(args[0], "--verify", StringComparison.OrdinalIgnoreCase);
         try
         {
+            if (!verifyMode && TryLaunchNewerPortable(args))
+            {
+                return 0;
+            }
+            if (!verifyMode)
+            {
+                EnsureNoNewerCacheVersion();
+                DisableOlderPortableLaunchers();
+            }
             string cacheDirectory = EnsureExtracted();
             string application = FindApplication(cacheDirectory);
             if (verifyMode)
@@ -65,8 +75,7 @@ internal static class PortableLauncher
                 {
                     return 2;
                 }
-                ProcessStartInfo probeInfo = CreateStartInfo(application, cacheDirectory);
-                probeInfo.Arguments = "--launch-probe";
+                ProcessStartInfo probeInfo = CreateStartInfo(application, cacheDirectory, new string[] { "--launch-probe" });
                 using (Process probe = Process.Start(probeInfo))
                 {
                     if (probe == null)
@@ -82,25 +91,28 @@ internal static class PortableLauncher
                 }
             }
 
+            string[] staleCaches = QuarantineStaleCaches(cacheDirectory);
             using (FileStream runningLock = OpenRunningLock(cacheDirectory))
-            using (Process applicationProcess = Process.Start(CreateStartInfo(application, cacheDirectory)))
+            using (Process applicationProcess = Process.Start(CreateStartInfo(application, cacheDirectory, args)))
             {
                 if (applicationProcess == null)
                 {
                     throw new InvalidOperationException("Quick Pet could not start.");
                 }
+                DeleteQuarantinedCaches(staleCaches);
                 applicationProcess.WaitForExit();
             }
             return 0;
         }
         catch (Exception error)
         {
+            WriteDiagnostic("startup", error, Application.ExecutablePath);
             if (verifyMode)
             {
                 return 1;
             }
             MessageBox.Show(
-                "快捷宠便携版无法启动。\r\n\r\n请把便携 EXE 移动到桌面或其他有写入权限的文件夹。\r\n运行文件会解压到 EXE 旁的 QuickPet-Portable-Cache。\r\n\r\n" + error.Message,
+                "快捷宠便携版无法启动。\r\n\r\n请把便携 EXE 移动到桌面或其他有写入权限的文件夹。\r\n运行文件会解压到 EXE 旁的 QuickPet-Portable-Cache。\r\n诊断日志位于 EXE 同目录，目录不可写时位于本机 AppData\\Local\\QuickPet。\r\n\r\n" + error.Message,
                 "快捷宠便携版",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
@@ -108,7 +120,7 @@ internal static class PortableLauncher
         }
     }
 
-    private static ProcessStartInfo CreateStartInfo(string application, string cacheDirectory)
+    private static ProcessStartInfo CreateStartInfo(string application, string cacheDirectory, string[] arguments)
     {
         Environment.SetEnvironmentVariable("PORTABLE_EXECUTABLE_FILE", Application.ExecutablePath);
         Environment.SetEnvironmentVariable("PORTABLE_EXECUTABLE_DIR", Path.GetDirectoryName(Application.ExecutablePath));
@@ -116,9 +128,225 @@ internal static class PortableLauncher
         Environment.SetEnvironmentVariable("QUICKPET_PORTABLE_CACHE_ROOT", Path.GetDirectoryName(cacheDirectory));
         ProcessStartInfo startInfo = new ProcessStartInfo();
         startInfo.FileName = application;
+        startInfo.Arguments = String.Join(" ", (arguments ?? new string[0]).Select(QuoteArgument));
         startInfo.WorkingDirectory = cacheDirectory;
         startInfo.UseShellExecute = false;
         return startInfo;
+    }
+
+    private static string QuoteArgument(string argument)
+    {
+        if (String.IsNullOrEmpty(argument)) return "\"\"";
+        return argument.Contains(" ") || argument.Contains("\"")
+            ? "\"" + argument.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\""
+            : argument;
+    }
+
+    private static string[] DiagnosticLogPaths()
+    {
+        return new string[]
+        {
+            Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "QuickPet-Portable.log"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "QuickPet", "QuickPet-Portable.log")
+        };
+    }
+
+    private static void WriteDiagnostic(string operation, Exception error, string target)
+    {
+        string safeTarget = (target ?? String.Empty).Replace("\r", " ").Replace("\n", " ");
+        string line = DateTime.UtcNow.ToString("o") + " [" + operation + "] " + safeTarget + Environment.NewLine + error + Environment.NewLine;
+        foreach (string logPath in DiagnosticLogPaths())
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(logPath));
+                if (File.Exists(logPath) && new FileInfo(logPath).Length > 512 * 1024)
+                {
+                    string archivedPath = logPath + ".old";
+                    if (File.Exists(archivedPath)) File.Delete(archivedPath);
+                    File.Move(logPath, archivedPath);
+                }
+                File.AppendAllText(logPath, line, Encoding.UTF8);
+                return;
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    private static bool IsPortableLauncher(string path)
+    {
+        try
+        {
+            FileVersionInfo info = FileVersionInfo.GetVersionInfo(path);
+            return String.Equals(info.ProductName, "Quick Pet Portable", StringComparison.OrdinalIgnoreCase)
+                || String.Equals(info.FileDescription, "Portable launcher for Quick Pet", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static IEnumerable<string> PortableLaunchers(string directory)
+    {
+        return Directory.GetFiles(directory, "*.exe", SearchOption.TopDirectoryOnly)
+            .Where(path => IsPortableLauncher(path));
+    }
+
+    private static bool TryLaunchNewerPortable(string[] arguments)
+    {
+        string currentPath = Path.GetFullPath(Application.ExecutablePath);
+        string directory = Path.GetDirectoryName(currentPath);
+        Version currentVersion = new Version(AppVersion);
+        string newerLauncher = PortableLaunchers(directory)
+            .Where(path => !String.Equals(Path.GetFullPath(path), currentPath, StringComparison.OrdinalIgnoreCase))
+            .Select(path => new { Path = path, Version = ReadLauncherVersion(path) })
+            .Where(candidate => candidate.Version != null && candidate.Version.CompareTo(currentVersion) > 0)
+            .OrderByDescending(candidate => candidate.Version)
+            .ThenByDescending(candidate => File.GetLastWriteTimeUtc(candidate.Path))
+            .Select(candidate => candidate.Path)
+            .FirstOrDefault();
+        if (String.IsNullOrEmpty(newerLauncher))
+        {
+            return false;
+        }
+
+        ProcessStartInfo startInfo = new ProcessStartInfo();
+        startInfo.FileName = newerLauncher;
+        startInfo.Arguments = String.Join(" ", (arguments ?? new string[0]).Select(QuoteArgument));
+        startInfo.WorkingDirectory = Path.GetDirectoryName(newerLauncher);
+        startInfo.UseShellExecute = false;
+        if (Process.Start(startInfo) == null)
+        {
+            throw new InvalidOperationException("\u65e0\u6cd5\u542f\u52a8\u540c\u76ee\u5f55\u4e2d\u7684\u6700\u65b0\u4fbf\u643a\u7248\u3002");
+        }
+        return true;
+    }
+
+    private static Version ReadLauncherVersion(string path)
+    {
+        try
+        {
+            Version version;
+            string value = FileVersionInfo.GetVersionInfo(path).FileVersion;
+            return Version.TryParse(value, out version) ? version : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static void DisableOlderPortableLaunchers()
+    {
+        string currentPath = Path.GetFullPath(Application.ExecutablePath);
+        string directory = Path.GetDirectoryName(currentPath);
+        Version currentVersion = new Version(AppVersion);
+        var olderLaunchers = PortableLaunchers(directory)
+            .Where(path => !String.Equals(Path.GetFullPath(path), currentPath, StringComparison.OrdinalIgnoreCase))
+            .Select(path => new { Path = path, Version = ReadLauncherVersion(path) })
+            .Where(candidate => candidate.Version != null && candidate.Version.CompareTo(currentVersion) < 0)
+            .ToArray();
+        foreach (var candidate in olderLaunchers)
+        {
+            try
+            {
+                string disabledPath = candidate.Path + ".disabled";
+                if (File.Exists(disabledPath))
+                {
+                    disabledPath += "-" + DateTime.UtcNow.Ticks;
+                }
+                File.Move(candidate.Path, disabledPath);
+            }
+            catch (Exception error)
+            {
+                WriteDiagnostic("disable-old-launcher", error, candidate.Path);
+            }
+        }
+    }
+
+    private static Version ReadCacheVersion(string directory)
+    {
+        string name = Path.GetFileName(directory);
+        int separator = name.IndexOf('-');
+        string value = separator > 0 ? name.Substring(0, separator) : name;
+        Version version;
+        return Version.TryParse(value, out version) ? version : null;
+    }
+
+    private static void EnsureNoNewerCacheVersion()
+    {
+        string root = Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "QuickPet-Portable-Cache");
+        if (!Directory.Exists(root))
+        {
+            return;
+        }
+        Version currentVersion = new Version(AppVersion);
+        bool newerCacheExists = Directory.GetDirectories(root)
+            .Select(ReadCacheVersion)
+            .Any(version => version != null && version.CompareTo(currentVersion) > 0);
+        if (newerCacheExists)
+        {
+            throw new InvalidOperationException("\u68c0\u6d4b\u5230\u66f4\u9ad8\u7248\u672c\u7684\u8fd0\u884c\u6587\u4ef6\u3002\u65e7\u7248\u5df2\u505c\u6b62\u542f\u52a8\uff0c\u8bf7\u4f7f\u7528\u540c\u76ee\u5f55\u4e2d\u7684\u6700\u65b0\u4fbf\u643a EXE\u3002");
+        }
+    }
+
+    private static string[] QuarantineStaleCaches(string currentCacheDirectory)
+    {
+        string root = Path.GetDirectoryName(currentCacheDirectory);
+        Version currentVersion = new Version(AppVersion);
+        List<string> quarantined = new List<string>();
+        foreach (string directory in Directory.GetDirectories(root))
+        {
+            string candidate = Path.GetFullPath(directory);
+            if (String.Equals(candidate, Path.GetFullPath(currentCacheDirectory), StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+            Version candidateVersion = ReadCacheVersion(candidate);
+            if (candidateVersion == null || candidateVersion.CompareTo(currentVersion) > 0)
+            {
+                continue;
+            }
+
+            if (candidate.IndexOf(".deleting-", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                quarantined.Add(candidate);
+                continue;
+            }
+            string deletingDirectory = candidate + ".deleting-" + Process.GetCurrentProcess().Id;
+            try
+            {
+                if (Directory.Exists(deletingDirectory))
+                {
+                    Directory.Delete(deletingDirectory, true);
+                }
+                Directory.Move(candidate, deletingDirectory);
+                quarantined.Add(deletingDirectory);
+            }
+            catch (Exception error)
+            {
+                WriteDiagnostic("quarantine-stale-cache", error, candidate);
+            }
+        }
+        return quarantined.ToArray();
+    }
+
+    private static void DeleteQuarantinedCaches(string[] staleCaches)
+    {
+        foreach (string deletingDirectory in staleCaches ?? new string[0])
+        {
+            try
+            {
+                Directory.Delete(deletingDirectory, true);
+            }
+            catch (Exception error)
+            {
+                WriteDiagnostic("delete-quarantined-cache", error, deletingDirectory);
+            }
+        }
     }
 
     private static FileStream OpenRunningLock(string cacheDirectory)

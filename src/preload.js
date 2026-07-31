@@ -85,6 +85,11 @@ contextBridge.exposeInMainWorld('quickPet', {
   importMigration: () => ipcRenderer.invoke('migration:import'),
   getStorageReport: () => ipcRenderer.invoke('maintenance:report'),
   clearRuntimeCache: () => ipcRenderer.invoke('maintenance:clear-cache'),
+  onCacheCleanupProgress: (callback) => {
+    const listener = (_event, progress) => callback(progress);
+    ipcRenderer.on('maintenance:cache-progress', listener);
+    return () => ipcRenderer.removeListener('maintenance:cache-progress', listener);
+  },
   clearOldPortableCaches: () => ipcRenderer.invoke('maintenance:clear-old-portable-caches'),
   openDataFolder: () => ipcRenderer.invoke('maintenance:open-data'),
   exitSafeMode: () => ipcRenderer.invoke('maintenance:exit-safe-mode'),

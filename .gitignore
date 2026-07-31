@@ -10,3 +10,4 @@ Thumbs.db
 output/
 tests/.quick-pet-*-test-data/
 tests/*.png
+cache-cleanup-test-result.json

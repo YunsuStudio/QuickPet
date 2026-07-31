@@ -388,6 +388,21 @@ input[type="range"], input[type="checkbox"] { accent-color: var(--action); }
 .storage-report > div:last-child { border-right: 0; }
 .storage-report span { color: var(--text-soft); font-size: 9px; }
 .storage-report b { font: 650 14px/1.2 "Cascadia Mono", "Consolas", monospace; }
+.cache-cleanup-progress { display: grid; gap: 9px; margin-top: 12px; padding: 11px 13px; border: 1px solid var(--border); border-left: 3px solid var(--text); border-radius: 6px; background: var(--surface-2); }
+.cache-cleanup-progress.hidden { display: none; }
+.cache-cleanup-heading,
+.cache-cleanup-detail { display: flex; align-items: center; justify-content: space-between; min-width: 0; gap: 12px; }
+.cache-cleanup-heading span { overflow: hidden; color: var(--text); font-size: 10px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.cache-cleanup-heading b,
+.cache-cleanup-detail b { flex: 0 0 auto; font: 650 9px/1.2 "Cascadia Mono", "Consolas", monospace; }
+.cache-cleanup-detail span { overflow: hidden; color: var(--text-soft); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.cache-cleanup-detail b { color: var(--text-soft); }
+.cache-cleanup-track { height: 6px; overflow: hidden; border: 1px solid var(--border); border-radius: 2px; background: var(--surface-3); }
+.cache-cleanup-track i { display: block; width: 0; height: 100%; background: var(--action); transition: width 180ms var(--ease-out); }
+.cache-cleanup-progress[data-stage="complete"] { border-left-color: var(--success); }
+.cache-cleanup-progress[data-result="warning"] { border-left-color: var(--warning); }
+.cache-cleanup-progress[data-result="error"] { border-left-color: var(--danger); }
+.cache-cleanup-progress[data-stage="error"] .cache-cleanup-track i { background: var(--danger); }
 .maintenance-actions { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
 .maintenance-actions .preserve-data { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; color: var(--text-soft); font-size: 9px; }
 .update-source { margin: 8px 0 12px; }
@@ -427,6 +442,10 @@ input[type="range"], input[type="checkbox"] { accent-color: var(--action); }
 @keyframes fadeSettle {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cache-cleanup-track i { transition: none; }
 }
 
 @keyframes modalSettle {

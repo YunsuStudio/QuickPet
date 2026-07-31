@@ -1,6 +1,6 @@
 {
   "name": "quick-pet",
-  "version": "0.11.10",
+  "version": "0.11.17",
   "description": "可自定义的 Windows 桌宠快捷收纳器",
   "main": "src/main/main.js",
   "author": "Quick Pet",

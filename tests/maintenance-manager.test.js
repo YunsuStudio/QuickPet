@@ -92,7 +92,7 @@ test('同时统计程序旁缓存和旧临时缓存，并使用 Windows 重试�
     assert.equal(result.removedCount, 2);
     assert.equal(result.releasedBytes, 20);
     assert.equal(fs.existsSync(current), true);
-    assert.equal(calls.every((call) => call.options.maxRetries >= 10 && call.options.retryDelay >= 100), true);
+    assert.equal(calls.every((call) => call.options.maxRetries <= 3 && call.options.retryDelay >= 100), true);
   } finally {
     fs.rmSync(parent, { recursive: true, force: true });
   }
@@ -107,6 +107,247 @@ test('权限不足不会被误报为旧版仍在运行', async () => {
     const result = await manager.clearOldPortableCaches();
     assert.equal(result.skippedCount, 0);
     assert.equal(result.failures[0].code, 'permission');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('一键清理会清除 Electron 缓存和旧版运行目录但保留当前版本', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'quick-pet-cache-all-'));
+  const current = path.join(root, 'current');
+  const stale = path.join(root, 'stale');
+  fs.mkdirSync(current);
+  fs.mkdirSync(stale);
+  fs.writeFileSync(path.join(current, 'app.bin'), Buffer.alloc(12));
+  fs.writeFileSync(path.join(stale, 'old.bin'), Buffer.alloc(20));
+  let runtimeBytes = 30;
+  let cacheCleared = 0;
+  let codeCacheCleared = 0;
+  const session = {
+    getCacheSize: async () => runtimeBytes,
+    clearCache: async () => { cacheCleared += 1; runtimeBytes = 0; },
+    clearCodeCaches: async () => { codeCacheCleared += 1; }
+  };
+  try {
+    const manager = new MaintenanceManager({
+      portableCacheRoot: root,
+      currentCacheDirectory: current,
+      sessionProvider: () => session
+    });
+    const before = await manager.report();
+    assert.equal(before.runtimeCacheBytes, 30);
+    assert.equal(before.cleanableCacheBytes, 50);
+
+    const result = await manager.clearCache();
+
+    assert.equal(cacheCleared, 1);
+    assert.equal(codeCacheCleared, 1);
+    assert.equal(fs.existsSync(current), true);
+    assert.equal(fs.existsSync(stale), false);
+    assert.equal(result.runtimeReleasedBytes, 30);
+    assert.equal(result.portableReleasedBytes, 20);
+    assert.equal(result.releasedBytes, 50);
+    assert.equal(result.report.cleanableCacheBytes, 0);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('Electron 缓存接口卡住时仍会先删除旧版运行目录并及时返回', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'quick-pet-cache-timeout-'));
+  const current = path.join(root, 'current');
+  const stale = path.join(root, 'stale');
+  fs.mkdirSync(current);
+  fs.mkdirSync(stale);
+  fs.writeFileSync(path.join(current, 'app.bin'), Buffer.alloc(12));
+  fs.writeFileSync(path.join(stale, 'old.bin'), Buffer.alloc(20));
+  const never = new Promise(() => {});
+  const session = {
+    getCacheSize: async () => 30,
+    clearCache: () => never,
+    clearCodeCaches: () => never
+  };
+  try {
+    const manager = new MaintenanceManager({
+      portableCacheRoot: root,
+      currentCacheDirectory: current,
+      sessionProvider: () => session,
+      cacheOperationTimeout: 20
+    });
+    const started = Date.now();
+    const result = await manager.clearCache();
+
+    assert.equal(fs.existsSync(current), true);
+    assert.equal(fs.existsSync(stale), false);
+    assert.equal(result.portableReleasedBytes, 20);
+    assert.equal(result.runtimeCacheTimedOut, true);
+    assert.ok(Date.now() - started < 500);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('缓存大小查询卡住时存储报告仍会及时返回', async () => {
+  const never = new Promise(() => {});
+  const manager = new MaintenanceManager({
+    sessionProvider: () => ({ getCacheSize: () => never }),
+    cacheOperationTimeout: 20
+  });
+  const started = Date.now();
+  const report = await manager.report();
+
+  assert.equal(report.runtimeCacheBytes, 0);
+  assert.ok(Date.now() - started < 500);
+});
+
+test('单份旧缓存删除卡住时会超时并继续清理其他目录', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'quick-pet-remove-timeout-'));
+  const current = path.join(root, 'current');
+  const blocked = path.join(root, 'blocked');
+  const removable = path.join(root, 'removable');
+  for (const directory of [current, blocked, removable]) {
+    fs.mkdirSync(directory);
+    fs.writeFileSync(path.join(directory, 'payload.bin'), Buffer.alloc(10));
+  }
+  const never = new Promise(() => {});
+  try {
+    const manager = new MaintenanceManager({
+      portableCacheRoot: root,
+      currentCacheDirectory: current,
+      removeOperationTimeout: 20,
+      removeEntry: (target, options) => target === blocked ? never : fs.promises.rm(target, options)
+    });
+    const started = Date.now();
+    const result = await manager.clearOldPortableCaches();
+
+    assert.equal(fs.existsSync(current), true);
+    assert.equal(fs.existsSync(blocked), true);
+    assert.equal(fs.existsSync(removable), false);
+    assert.equal(result.removedCount, 1);
+    assert.equal(result.failures[0].code, 'timeout');
+    assert.ok(Date.now() - started < 500);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('旧缓存删除超时后会完成取消且不会继续后台删除', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'quick-pet-remove-cancel-'));
+  const current = path.join(root, 'current');
+  const blocked = path.join(root, 'blocked');
+  for (const directory of [current, blocked]) {
+    fs.mkdirSync(directory);
+    fs.writeFileSync(path.join(directory, 'payload.bin'), Buffer.alloc(10));
+  }
+  let cancelled = false;
+  let completed = false;
+  let removalTimer;
+  try {
+    const manager = new MaintenanceManager({
+      portableCacheRoot: root,
+      currentCacheDirectory: current,
+      removeOperationTimeout: 20,
+      createRemoveOperation: (target, options) => ({
+        promise: new Promise((resolve) => {
+          removalTimer = setTimeout(async () => {
+            completed = true;
+            await fs.promises.rm(target, options);
+            resolve();
+          }, 100);
+        }),
+        cancel: async () => {
+          cancelled = true;
+          clearTimeout(removalTimer);
+        }
+      })
+    });
+
+    const result = await manager.clearOldPortableCaches();
+    await new Promise((resolve) => setTimeout(resolve, 130));
+
+    assert.equal(result.failures[0].code, 'timeout');
+    assert.equal(cancelled, true);
+    assert.equal(completed, false);
+    assert.equal(fs.existsSync(blocked), true);
+  } finally {
+    clearTimeout(removalTimer);
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('一键清理会按真实阶段报告进度和已释放空间', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'quick-pet-cache-progress-'));
+  const current = path.join(root, 'current');
+  const stale = path.join(root, 'stale');
+  fs.mkdirSync(current);
+  fs.mkdirSync(stale);
+  fs.writeFileSync(path.join(current, 'app.bin'), Buffer.alloc(12));
+  fs.writeFileSync(path.join(stale, 'old.bin'), Buffer.alloc(20));
+  let runtimeBytes = 30;
+  const events = [];
+  const session = {
+    getCacheSize: async () => runtimeBytes,
+    clearCache: async () => { runtimeBytes = 0; },
+    clearCodeCaches: async () => {}
+  };
+  try {
+    const manager = new MaintenanceManager({
+      portableCacheRoot: root,
+      currentCacheDirectory: current,
+      sessionProvider: () => session
+    });
+
+    await manager.clearCache((progress) => events.push(progress));
+
+    assert.deepEqual(events.map((event) => event.stage), [
+      'scan',
+      'portable-start',
+      'portable-item-start',
+      'portable-item-done',
+      'portable-complete',
+      'runtime-start',
+      'runtime-complete',
+      'complete'
+    ]);
+    assert.equal(events[2].name, 'stale');
+    assert.equal(events[2].bytes, 20);
+    assert.equal(events[3].releasedBytes, 20);
+    assert.equal(events[6].runtimeReleasedBytes, 30);
+    assert.equal(events[7].releasedBytes, 50);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('跳过、失败和 Electron 超时会报告对应清理进度', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'quick-pet-cache-progress-errors-'));
+  const running = path.join(root, 'running');
+  const blocked = path.join(root, 'blocked');
+  fs.mkdirSync(running);
+  fs.mkdirSync(blocked);
+  fs.writeFileSync(path.join(running, 'run.bin'), Buffer.alloc(10));
+  fs.writeFileSync(path.join(blocked, 'blocked.bin'), Buffer.alloc(15));
+  const never = new Promise(() => {});
+  const events = [];
+  try {
+    const manager = new MaintenanceManager({
+      portableCacheRoot: root,
+      cacheState: (directory) => directory === running ? 'running' : 'permission',
+      sessionProvider: () => ({
+        getCacheSize: async () => 30,
+        clearCache: () => never,
+        clearCodeCaches: () => never
+      }),
+      cacheOperationTimeout: 20
+    });
+
+    await manager.clearCache((progress) => events.push(progress));
+
+    const stages = events.map((event) => event.stage);
+    assert.ok(stages.includes('portable-item-skipped'));
+    assert.ok(stages.includes('portable-item-failed'));
+    assert.ok(stages.includes('runtime-timeout'));
+    assert.equal(stages.at(-1), 'complete');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

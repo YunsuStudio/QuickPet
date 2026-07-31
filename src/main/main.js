@@ -41,7 +41,9 @@ const isDirectDragTest = process.argv.includes('--direct-drag-test');
 const isCrossScreenTest = process.argv.includes('--cross-screen-test');
 const isCrossScreenDragTest = process.argv.includes('--cross-screen-drag-test');
 const isAcceptanceTest = process.argv.includes('--acceptance-test');
-const isAutomatedTest = isSmokeTest || isBackgroundRemovalTest || isMotionTest || is3dTest || is3dModelTest || isUiTest || isPerformanceTest || isClickThroughTest || isDirectDragTest || isCrossScreenTest || isCrossScreenDragTest || isAcceptanceTest;
+const isCacheCleanupTest = process.argv.includes('--cache-cleanup-test');
+const isCacheProgressUiTest = process.argv.includes('--cache-progress-ui-test');
+const isAutomatedTest = isSmokeTest || isBackgroundRemovalTest || isMotionTest || is3dTest || is3dModelTest || isUiTest || isPerformanceTest || isClickThroughTest || isDirectDragTest || isCrossScreenTest || isCrossScreenDragTest || isAcceptanceTest || isCacheCleanupTest || isCacheProgressUiTest;
 const automatedSessionDirectory = isAutomatedTest ? path.join(os.tmpdir(), `quick-pet-test-session-${process.pid}`) : '';
 if (automatedSessionDirectory) app.setPath('sessionData', automatedSessionDirectory);
 if (is3dModelTest) app.setPath('userData', path.join(process.cwd(), 'tests', '.quick-pet-model-test-data'));
@@ -52,6 +54,7 @@ if (isDirectDragTest) app.setPath('userData', path.join(process.cwd(), 'tests', 
 if (isCrossScreenTest) app.setPath('userData', path.join(process.cwd(), 'tests', '.quick-pet-cross-screen-test-data'));
 if (isCrossScreenDragTest) app.setPath('userData', path.join(process.cwd(), 'tests', '.quick-pet-cross-screen-drag-test-data'));
 if (isAcceptanceTest) app.setPath('userData', path.join(process.cwd(), 'tests', '.quick-pet-acceptance-test-data'));
+if (isCacheProgressUiTest) app.setPath('userData', path.join(process.cwd(), 'tests', '.quick-pet-cache-progress-test-data'));
 if (isSmokeTest) app.setPath('userData', path.join(process.cwd(), 'tests', '.quick-pet-smoke-test-data'));
 if (isMotionTest) app.setPath('userData', path.join(process.cwd(), 'tests', '.quick-pet-motion-test-data'));
 if (is3dTest) app.setPath('userData', path.join(process.cwd(), 'tests', '.quick-pet-3d-test-data'));
@@ -76,6 +79,8 @@ let safeMode = false;
 let safeModeRestore = null;
 let clipboardTimer;
 let lastClipboardText = '';
+let cacheCleanupInFlight = null;
+const cacheCleanupProgressListeners = new Set();
 const companionWindows = new Map();
 const companionControllers = new Map();
 const pendingModelPreviews = new Map();
@@ -415,8 +420,7 @@ function launchElevatedCacheCleanup(targets) {
   child.unref();
 }
 
-async function clearOldPortableCachesWithElevation() {
-  const result = await maintenanceManager.clearOldPortableCaches();
+async function requestCacheCleanupElevation(result) {
   const permissionFailures = result.failures.filter((failure) => failure.code === 'permission' && failure.path);
   if (!permissionFailures.length) return result;
   const options = {
@@ -437,6 +441,25 @@ async function clearOldPortableCachesWithElevation() {
     result.elevationRequested = true;
   }
   return result;
+}
+
+async function clearOldPortableCachesWithElevation() {
+  return requestCacheCleanupElevation(await maintenanceManager.clearOldPortableCaches());
+}
+
+async function clearRuntimeCacheWithElevation(onProgress) {
+  if (typeof onProgress === 'function') cacheCleanupProgressListeners.add(onProgress);
+  if (!cacheCleanupInFlight) {
+    cacheCleanupInFlight = maintenanceManager.clearCache((progress) => {
+      for (const listener of cacheCleanupProgressListeners) {
+        try { listener(progress); } catch {}
+      }
+    }).then((result) => requestCacheCleanupElevation(result)).finally(() => {
+      cacheCleanupInFlight = null;
+      cacheCleanupProgressListeners.clear();
+    });
+  }
+  return cacheCleanupInFlight;
 }
 
 async function promptForOldPortableCaches() {
@@ -810,7 +833,9 @@ function endPetWindowDrag(window) {
   const drag = petDragStates.get(window);
   if (!drag) return;
   petDragStates.delete(window);
-  if (drag.active && !window.isDestroyed()) motionControllerForPetWindow(window)?.handleUserMove(window.getBounds());
+  const controller = motionControllerForPetWindow(window);
+  controller?.setDragging(false);
+  if (drag.active && !window.isDestroyed()) controller?.handleUserMove(window.getBounds());
 }
 
 function registerIpc() {
@@ -852,6 +877,7 @@ function registerIpc() {
     const drag = senderWindow ? petDragStates.get(senderWindow) : null;
     if (!senderWindow || !drag || drag.active || senderWindow.isDestroyed()) return;
     drag.active = true;
+    motionControllerForPetWindow(senderWindow)?.setDragging(true);
   });
   ipcMain.on('pet:drag-move', (event, x, y) => {
     const senderWindow = petWindowFromSender(event.sender);
@@ -1242,7 +1268,14 @@ function registerIpc() {
   ipcMain.handle('migration:import', () => importMigrationBundle());
 
   ipcMain.handle('maintenance:report', async () => maintenanceManager.report());
-  ipcMain.handle('maintenance:clear-cache', async () => { const report = await maintenanceManager.clearCache(); broadcastState(); return report; });
+  ipcMain.handle('maintenance:clear-cache', async (event) => {
+    const sender = event.sender;
+    const result = await clearRuntimeCacheWithElevation((progress) => {
+      if (!sender.isDestroyed()) sender.send('maintenance:cache-progress', progress);
+    });
+    broadcastState();
+    return result;
+  });
   ipcMain.handle('maintenance:clear-old-portable-caches', async () => clearOldPortableCachesWithElevation());
   ipcMain.handle('maintenance:open-data', () => shell.openPath(app.getPath('userData')));
   ipcMain.handle('maintenance:exit-safe-mode', () => leaveSafeMode());
@@ -1343,15 +1376,53 @@ if (!gotLock) {
     if (recovered) store.addNotification({ title: '数据已自动恢复', message: '检测到配置损坏，已恢复最近一份有效备份', kind: 'warning' });
     modelLibrary = new ModelLibrary({ directory: modelDirectory, store });
     const legacyPortableCacheRoot = path.join(os.tmpdir(), 'QuickPetPortable');
-    const portableCacheRoot = process.env.QUICKPET_PORTABLE_CACHE_ROOT || legacyPortableCacheRoot;
+    const portableCacheRoot = isCacheProgressUiTest
+      ? path.join(automatedSessionDirectory, 'portable-cache')
+      : process.env.QUICKPET_PORTABLE_CACHE_ROOT || legacyPortableCacheRoot;
     maintenanceManager = new MaintenanceManager({
       userData: userDataDirectory,
       modelDirectory,
       backupDirectory,
-      portableCacheRoots: [portableCacheRoot, legacyPortableCacheRoot],
+      portableCacheRoots: isCacheProgressUiTest ? [portableCacheRoot] : [portableCacheRoot, legacyPortableCacheRoot],
       currentCacheDirectory: process.env.QUICKPET_PORTABLE === '1' ? path.dirname(process.execPath) : '',
       sessionProvider: () => session.defaultSession
     });
+    if (isCacheProgressUiTest) {
+      const fixture = path.join(portableCacheRoot, `progress-fixture-${process.pid}`);
+      fs.mkdirSync(fixture, { recursive: true });
+      fs.writeFileSync(path.join(fixture, 'old-runtime.bin'), Buffer.alloc(1024));
+      const createRemoveOperation = maintenanceManager.createRemoveOperation;
+      maintenanceManager.createRemoveOperation = (...args) => {
+        const operation = createRemoveOperation(...args);
+        return {
+          promise: new Promise((resolve, reject) => {
+            setTimeout(() => operation.promise.then(resolve, reject), 500);
+          }),
+          cancel: () => operation.cancel?.()
+        };
+      };
+    }
+    if (isCacheCleanupTest) {
+      const resultPath = path.join(process.cwd(), 'cache-cleanup-test-result.json');
+      try {
+        const before = await maintenanceManager.report();
+        const cleanup = await maintenanceManager.clearCache();
+        const after = await maintenanceManager.report();
+        fs.writeFileSync(resultPath, JSON.stringify({
+          execPath: process.execPath,
+          cacheRoot: portableCacheRoot,
+          currentCacheDirectory: process.env.QUICKPET_PORTABLE === '1' ? path.dirname(process.execPath) : '',
+          before,
+          cleanup,
+          after
+        }, null, 2));
+        exitAutomatedTest(after.stalePortableCacheCount === 0 ? 0 : 14);
+      } catch (error) {
+        fs.writeFileSync(resultPath, JSON.stringify({ error: error.stack || error.message }, null, 2));
+        exitAutomatedTest(14);
+      }
+      return;
+    }
     migrationManager = new MigrationManager({ dataFile, modelDirectory, assetDirectory, store, backupManager, appVersion: app.getVersion() });
     updateManager = new UpdateManager({
       currentVersion: app.getVersion(),
@@ -1389,7 +1460,7 @@ if (!gotLock) {
     }
     registerIpc();
     createPetWindow();
-    if (isSmokeTest || isUiTest || isAcceptanceTest) createPanelWindow();
+    if (isSmokeTest || isUiTest || isAcceptanceTest || isCacheProgressUiTest) createPanelWindow();
     motionController = new PetMotionController({
       getWindow: () => petWindow,
       getSettings: () => ({ ...store.data.settings, petStatus: store.data.petStatus }),
@@ -1526,6 +1597,67 @@ if (!gotLock) {
       });
       setTimeout(() => exitAutomatedTest(7), 12000);
     }
+    if (isCacheProgressUiTest) {
+      whenWebContentsLoaded(panelWindow.webContents, () => {
+        navigatePanel('settings');
+        setTimeout(async () => {
+          try {
+            const running = await panelWindow.webContents.executeJavaScript(`(async () => {
+              window.confirm = () => true;
+              const events = [];
+              window.quickPet.onCacheCleanupProgress((progress) => events.push(progress.stage));
+              document.getElementById('clearCacheButton').click();
+              const waitFor = async (predicate, timeout = 3000) => {
+                const started = Date.now();
+                while (!predicate()) {
+                  if (Date.now() - started > timeout) throw new Error('timed out waiting for cache progress');
+                  await new Promise((resolve) => setTimeout(resolve, 25));
+                }
+              };
+              const progress = document.getElementById('cacheCleanupProgress');
+              await waitFor(() => progress.dataset.stage === 'portable-item-start');
+              progress.scrollIntoView({ block: 'center' });
+              await new Promise((resolve) => setTimeout(resolve, 100));
+              window.__cacheProgressStages = events;
+              return {
+                visible: !progress.classList.contains('hidden'),
+                stage: progress.dataset.stage,
+                status: document.getElementById('cacheCleanupStatus').textContent,
+                percent: document.getElementById('cacheCleanupPercent').textContent,
+                clearDisabled: document.getElementById('clearCacheButton').disabled,
+                refreshDisabled: document.getElementById('refreshStorageButton').disabled
+              };
+            })()`);
+            const screenshot = await panelWindow.webContents.capturePage();
+            const screenshotPath = path.join(process.cwd(), 'tests', 'cache-cleanup-progress.png');
+            fs.writeFileSync(screenshotPath, screenshot.toPNG());
+            const completed = await panelWindow.webContents.executeJavaScript(`(async () => {
+              const progress = document.getElementById('cacheCleanupProgress');
+              const started = Date.now();
+              while (progress.dataset.stage !== 'complete' || document.getElementById('clearCacheButton').textContent.includes('清理中')) {
+                if (Date.now() - started > 8000) throw new Error('timed out waiting for cache cleanup completion');
+                await new Promise((resolve) => setTimeout(resolve, 25));
+              }
+              return {
+                stage: progress.dataset.stage,
+                percent: document.getElementById('cacheCleanupPercent').textContent,
+                status: document.getElementById('cacheCleanupStatus').textContent,
+                refreshDisabled: document.getElementById('refreshStorageButton').disabled,
+                stages: window.__cacheProgressStages
+              };
+            })()`);
+            const runningPassed = running.visible && running.stage === 'portable-item-start' && running.clearDisabled && running.refreshDisabled;
+            const completedPassed = completed.stage === 'complete' && completed.percent === '100%' && !completed.refreshDisabled && completed.stages.includes('runtime-start') && completed.stages.includes('complete');
+            console.log(`cache-progress-ui-test running=${JSON.stringify(running)} completed=${JSON.stringify(completed)} screenshot=${screenshotPath}`);
+            exitAutomatedTest(runningPassed && completedPassed ? 0 : 15);
+          } catch (error) {
+            console.error(`cache-progress-ui-test-error ${error.stack || error.message}`);
+            exitAutomatedTest(15);
+          }
+        }, 900);
+      });
+      setTimeout(() => exitAutomatedTest(15), 15000);
+    }
     if (isPerformanceTest) {
       whenPetShown(() => {
         const samples = [];
@@ -1623,7 +1755,39 @@ if (!gotLock) {
               petWindow.setBounds({ x, y: bounds.y, width: bounds.width, height: bounds.height }, false);
               await new Promise((resolve) => setTimeout(resolve, 12));
             }
-            console.log(`cross-screen-test positionOnlyFinal=${JSON.stringify(positionOnlyFinal)} fixedBoundsFinal=${JSON.stringify(petWindow.getBounds())}`);
+            const fixedBoundsFinal = petWindow.getBounds();
+            const seam = displays.slice(1).map((display) => display.workArea.x).find((x) => x > left && x < right + bounds.width);
+            let dragHoldPassed = true;
+            let dragHoldBounds = null;
+            let autoWalkPassed = true;
+            let autoWalkBounds = null;
+            if (Number.isFinite(seam)) {
+              const dragHoldX = Math.round(seam - bounds.width + 2);
+              motionController.setDragging(true);
+              motionController.moveTo(dragHoldX, bounds.y);
+              await new Promise((resolve) => setTimeout(resolve, 360));
+              dragHoldBounds = petWindow.getBounds();
+              dragHoldPassed = Math.abs(dragHoldBounds.x - dragHoldX) <= 3;
+              motionController.setDragging(false);
+
+              store.updateSettings({ petScreenMode: 'all', edgeSnap: true, autoWalk: true, naturalBehavior: false, nightSleep: false, activityPadding: 0, petWalkSpeed: 110 });
+              const autoWalkStartX = Math.round(seam - bounds.width - 50);
+              motionController.moveTo(autoWalkStartX, bounds.y);
+              motionController.syncToWindow(petBoundsForScale(store.data.settings.petScale, store.data.settings.petRenderMode));
+              motionController.pausedUntil = 0;
+              motionController.engine.mode = 'walk';
+              motionController.engine.direction = 1;
+              motionController.engine.lastTickAt = Date.now();
+              motionController.engine.phaseEndsAt = Date.now() + 6000;
+              motionController.start();
+              await new Promise((resolve) => setTimeout(resolve, 3000));
+              motionController.stop();
+              autoWalkBounds = petWindow.getBounds();
+              autoWalkPassed = autoWalkBounds.x > seam + 10;
+            }
+            console.log(`cross-screen-test positionOnlyFinal=${JSON.stringify(positionOnlyFinal)} fixedBoundsFinal=${JSON.stringify(fixedBoundsFinal)} dragHold=${JSON.stringify(dragHoldBounds)} dragHoldPassed=${dragHoldPassed} autoWalk=${JSON.stringify(autoWalkBounds)} autoWalkPassed=${autoWalkPassed}`);
+            if (!dragHoldPassed) throw new Error('edge snap moved the pet during a cross-screen drag hold');
+            if (!autoWalkPassed) throw new Error('automatic walking did not cross the internal display seam');
             exitAutomatedTest(0);
           } catch (error) {
             console.error(`cross-screen-test-error ${error.stack || error.message}`);
@@ -1631,7 +1795,7 @@ if (!gotLock) {
           }
         }, 700);
       });
-      setTimeout(() => exitAutomatedTest(11), 12000);
+      setTimeout(() => exitAutomatedTest(11), 18000);
     }
     if (isCrossScreenDragTest) {
       whenPetShown(() => {
@@ -1753,7 +1917,9 @@ if (!gotLock) {
 
               const storage = await api.getStorageReport();
               assert(Number.isFinite(storage.userDataBytes) && Number.isFinite(storage.portableCacheBytes), 'storage report');
-              await api.clearRuntimeCache(); mark('maintenance');
+              const cleanup = await api.clearRuntimeCache();
+              assert(Number.isFinite(cleanup.releasedBytes) && cleanup.report && Number.isFinite(cleanup.report.cleanableCacheBytes), 'cache cleanup result');
+              mark('maintenance');
 
               const update = await api.checkForUpdates('');
               assert(['current', 'available', 'unconfigured'].includes(update.status), 'update check'); mark('updates');

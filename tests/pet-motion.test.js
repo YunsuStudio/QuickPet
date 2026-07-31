@@ -145,3 +145,64 @@ test('跨不同缩放屏幕移动时持续使用桌宠的设计尺寸', () => {
     { width: 190, height: 230 }
   ]);
 });
+
+test('edge snap stays disabled for the entire direct-drag gesture', () => {
+  let bounds = { x: 2, y: 500, width: 190, height: 230 };
+  const requests = [];
+  const window = {
+    isDestroyed: () => false,
+    getBounds: () => ({ ...bounds }),
+    setBounds: (next) => {
+      requests.push(next);
+      bounds = { ...next };
+    },
+    webContents: { send: () => {} }
+  };
+  const display = { workArea: { x: 0, y: 0, width: 1920, height: 1080 } };
+  const controller = new PetMotionController({
+    getWindow: () => window,
+    getSettings: () => ({ activityPadding: 0, petScreenMode: 'current', edgeSnap: true }),
+    isPanelVisible: () => false,
+    screen: {
+      getDisplayMatching: () => display,
+      getAllDisplays: () => [display]
+    }
+  });
+
+  controller.setDragging(true);
+  assert.equal(controller.snapToEdge(), false);
+  assert.equal(requests.length, 0);
+
+  controller.setDragging(false);
+  assert.equal(controller.snapToEdge(), true);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].x, 0);
+});
+
+test('cross-screen walking does not snap to an internal display seam', () => {
+  let bounds = { x: -188, y: 700, width: 190, height: 230 };
+  const requests = [];
+  const leftDisplay = { workArea: { x: -1536, y: 0, width: 1536, height: 960 } };
+  const rightDisplay = { workArea: { x: 0, y: 0, width: 1920, height: 1080 } };
+  const window = {
+    isDestroyed: () => false,
+    getBounds: () => ({ ...bounds }),
+    setBounds: (next) => {
+      requests.push(next);
+      bounds = { ...next };
+    },
+    webContents: { send: () => {} }
+  };
+  const controller = new PetMotionController({
+    getWindow: () => window,
+    getSettings: () => ({ activityPadding: 0, petScreenMode: 'all', edgeSnap: true }),
+    isPanelVisible: () => false,
+    screen: {
+      getDisplayMatching: () => leftDisplay,
+      getAllDisplays: () => [leftDisplay, rightDisplay]
+    }
+  });
+
+  assert.equal(controller.snapToEdge(), false);
+  assert.equal(requests.length, 0);
+});

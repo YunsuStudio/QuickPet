@@ -130,6 +130,7 @@ class PetMotionController {
     this.lastUserActivityAt = Date.now();
     this.nextHungerRestAt = 0;
     this.windowSize = null;
+    this.dragging = false;
   }
 
   start() {
@@ -201,6 +202,11 @@ class PetMotionController {
     }
   }
 
+  setDragging(dragging) {
+    this.dragging = Boolean(dragging);
+    if (this.dragging) this.engine.pause();
+  }
+
   refreshBounds(bounds) {
     const settings = this.getSettings();
     const padding = Math.max(0, Number(settings.activityPadding) || 0);
@@ -216,13 +222,17 @@ class PetMotionController {
   snapToEdge() {
     const window = this.getWindow();
     const settings = this.getSettings();
-    if (!window || window.isDestroyed() || settings.edgeSnap === false) return false;
+    if (!window || window.isDestroyed() || this.dragging || settings.edgeSnap === false) return false;
     const bounds = window.getBounds();
-    const area = this.screen.getDisplayMatching(bounds).workArea;
+    const displays = settings.petScreenMode === 'all'
+      ? this.screen.getAllDisplays()
+      : [this.screen.getDisplayMatching(bounds)];
+    const leftEdge = Math.min(...displays.map((display) => display.workArea.x));
+    const rightEdge = Math.max(...displays.map((display) => display.workArea.x + display.workArea.width));
     const threshold = 28;
     const candidates = [
-      { distance: Math.abs(bounds.x - area.x), x: area.x },
-      { distance: Math.abs(bounds.x + bounds.width - (area.x + area.width)), x: area.x + area.width - bounds.width }
+      { distance: Math.abs(bounds.x - leftEdge), x: leftEdge },
+      { distance: Math.abs(bounds.x + bounds.width - rightEdge), x: rightEdge - bounds.width }
     ];
     const closest = candidates.sort((a, b) => a.distance - b.distance)[0];
     if (closest.distance > threshold) return false;

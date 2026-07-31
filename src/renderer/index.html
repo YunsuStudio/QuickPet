@@ -226,7 +226,12 @@
               <div class="settings-card-heading"><span class="settings-icon">⌫</span><div><h2>存储与卸载</h2><p>查看占用、清理缓存或移除程序</p></div><button id="refreshStorageButton" class="ghost-button">刷新</button></div>
               <label class="switch-row portable-cleanup-switch"><span><b>发现旧版缓存时提醒</b><small>更新后询问是否删除旧版运行文件，不影响个人数据</small></span><input id="portableCacheCleanupPromptInput" type="checkbox"><i></i></label>
               <div id="storageReport" class="storage-report"></div>
-              <div class="maintenance-actions"><button id="openDataButton" class="ghost-button">打开数据目录</button><button id="clearCacheButton" class="secondary-button">清理旧版缓存</button><label class="preserve-data"><input id="removeDataInput" type="checkbox"> 同时删除个人数据</label><button id="removeProgramButton" class="ghost-button danger-text">移除快捷宠</button></div>
+              <div id="cacheCleanupProgress" class="cache-cleanup-progress hidden" role="status" aria-live="polite">
+                <div class="cache-cleanup-heading"><span id="cacheCleanupStatus">准备清理</span><b id="cacheCleanupPercent">0%</b></div>
+                <div class="cache-cleanup-track" aria-hidden="true"><i id="cacheCleanupBar"></i></div>
+                <div class="cache-cleanup-detail"><span id="cacheCleanupCurrent">正在检查可清理内容</span><b id="cacheCleanupReleased">已释放 0 B</b></div>
+              </div>
+              <div class="maintenance-actions"><button id="openDataButton" class="ghost-button">打开数据目录</button><button id="clearCacheButton" class="secondary-button">一键清理缓存</button><label class="preserve-data"><input id="removeDataInput" type="checkbox"> 同时删除个人数据</label><button id="removeProgramButton" class="ghost-button danger-text">移除快捷宠</button></div>
             </article>
           </div>
         </section>
