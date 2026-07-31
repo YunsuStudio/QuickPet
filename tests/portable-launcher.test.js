@@ -12,6 +12,21 @@ test('便携启动器使用跨 PowerShell 版本安全的工作室署名', () =>
   assert.match(source, /AssemblyCopyright\("Copyright \\u00a9 2026 \\u4e91\\u95f4\\u6eaf\\u5de5\\u4f5c\\u5ba4"\)/);
 });
 
+test('便携启动器哈希计算不依赖 Get-FileHash 命令', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'create-portable-launcher.ps1'), 'utf8');
+  assert.doesNotMatch(source, /\bGet-FileHash\b/);
+  assert.match(source, /System\.Security\.Cryptography\.SHA256/);
+  assert.match(source, /ComputeHash/);
+});
+
+test('重复构建便携版时会先移除已有输出文件', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'create-portable-launcher.ps1'), 'utf8');
+  const removeIndex = source.indexOf('Remove-Item -LiteralPath $finalOutput -Force');
+  const moveIndex = source.indexOf('Move-Item -LiteralPath $compiledPath -Destination $finalOutput');
+  assert.ok(removeIndex >= 0);
+  assert.ok(moveIndex > removeIndex);
+});
+
 test('便携版把运行文件解压到 EXE 同级目录并传递缓存根路径', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'create-portable-launcher.ps1'), 'utf8');
   assert.match(source, /Path\.GetDirectoryName\(Application\.ExecutablePath\)/);

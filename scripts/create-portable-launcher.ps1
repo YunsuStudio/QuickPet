@@ -1,5 +1,21 @@
 $ErrorActionPreference = 'Stop'
 
+function Get-Sha256Hex {
+  param([Parameter(Mandatory = $true)][string]$Path)
+
+  $algorithm = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+      return ([System.BitConverter]::ToString($algorithm.ComputeHash($stream))).Replace('-', '')
+    } finally {
+      $stream.Dispose()
+    }
+  } finally {
+    $algorithm.Dispose()
+  }
+}
+
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $package = Get-Content -Raw -Encoding UTF8 (Join-Path $projectRoot 'package.json') | ConvertFrom-Json
 $distDirectory = Join-Path $projectRoot 'dist'
@@ -23,7 +39,7 @@ New-Item -ItemType Directory -Path $stageDirectory -Force | Out-Null
 
 try {
   Compress-Archive -Path (Join-Path $unpackedDirectory '*') -DestinationPath $archivePath -CompressionLevel Optimal -Force
-  $payloadHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archivePath).Hash
+  $payloadHash = Get-Sha256Hex -Path $archivePath
   $payloadId = $payloadHash.Substring(0, 16).ToLowerInvariant()
   $numericVersion = if ($package.version -match '^\d+\.\d+\.\d+$') { "$($package.version).0" } else { '1.0.0.0' }
 
@@ -535,7 +551,10 @@ internal static class PortableLauncher
     $outputStream.Dispose()
   }
 
-  Move-Item -LiteralPath $compiledPath -Destination $finalOutput -Force
+  if (Test-Path -LiteralPath $finalOutput) {
+    Remove-Item -LiteralPath $finalOutput -Force
+  }
+  Move-Item -LiteralPath $compiledPath -Destination $finalOutput
   Write-Output $finalOutput
 } finally {
   if (Test-Path -LiteralPath $stageDirectory) {

@@ -11,7 +11,7 @@
 <p>
   <img alt="Windows 10 和 11 x64" src="https://img.shields.io/badge/Windows-10%20%7C%2011%20x64-111111?style=flat-square&logo=windows&logoColor=white">
   <img alt="版本 0.12.2" src="https://img.shields.io/badge/version-0.12.2-111111?style=flat-square">
-  <img alt="102 项测试通过" src="https://img.shields.io/badge/tests-102%20passed-111111?style=flat-square">
+  <img alt="104 项测试通过" src="https://img.shields.io/badge/tests-104%20passed-111111?style=flat-square">
   <img alt="MIT 许可" src="https://img.shields.io/badge/license-MIT-111111?style=flat-square">
   <a href="https://github.com/YunsuStudio/QuickPet/actions/workflows/ci.yml"><img alt="CI 状态" src="https://github.com/YunsuStudio/QuickPet/actions/workflows/ci.yml/badge.svg"></a>
 </p>
@@ -121,7 +121,7 @@ npm run build
 
 ## 测试状态
 
-当前 102 项自动测试全部通过，覆盖三分类迁移、协议启动、搜索、启动台、组合键、桌宠投喂与拖动、透明区域点击、模型导入、备份恢复、便携缓存和不同 DPI 双屏接缝等主要流程。
+当前 104 项自动测试全部通过，覆盖三分类迁移、协议启动、搜索、启动台、组合键、桌宠投喂与拖动、透明区域点击、模型导入、备份恢复、便携缓存、发布构建兼容性和不同 DPI 双屏接缝等主要流程。
 
 性能记录：CPU `0.68%`、峰值内存 `332.6 MB`、3D 空闲帧率 `30.08 FPS`。
 
