@@ -57,6 +57,7 @@ class FullscreenWatcher {
     this.running = false;
     this.process = null;
     this.output = '';
+    this.fullscreenSamples = 0;
   }
 
   start() {
@@ -74,6 +75,23 @@ class FullscreenWatcher {
     if (this.process) this.process.kill();
     this.process = null;
     this.output = '';
+    this.fullscreenSamples = 0;
+  }
+
+  update(next) {
+    if (!next) {
+      this.fullscreenSamples = 0;
+      if (!this.lastValue) return;
+      this.lastValue = false;
+      this.onChange(false);
+      return;
+    }
+    if (this.lastValue) return;
+    this.fullscreenSamples += 1;
+    if (this.fullscreenSamples < 2) return;
+    this.fullscreenSamples = 0;
+    this.lastValue = true;
+    this.onChange(true);
   }
 
   consume(chunk) {
@@ -84,9 +102,7 @@ class FullscreenWatcher {
       let rect;
       try { rect = JSON.parse(line.trim()); } catch { continue; }
       const next = this.screen.getAllDisplays().some((display) => matchesDisplay(rect, display));
-      if (next === this.lastValue) continue;
-      this.lastValue = next;
-      this.onChange(next);
+      this.update(next);
     }
   }
 
@@ -96,9 +112,7 @@ class FullscreenWatcher {
     const rect = await this.readRect();
     const next = this.screen.getAllDisplays().some((display) => matchesDisplay(rect, display));
     this.running = false;
-    if (next === this.lastValue) return;
-    this.lastValue = next;
-    this.onChange(next);
+    this.update(next);
   }
 }
 

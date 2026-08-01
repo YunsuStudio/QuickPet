@@ -50,6 +50,7 @@ const DEFAULT_SETTINGS = {
   notificationsEnabled: true,
   performanceMode: 'efficient',
   sortBy: 'recent',
+  collapsedCategoryIds: [],
   autoCheckUpdates: true,
   portableCacheCleanupPrompt: true
 };
@@ -228,6 +229,7 @@ class Store {
 
     const status = input.petStatus && typeof input.petStatus === 'object' ? input.petStatus : {};
     const settings = { ...base.settings, ...(input.settings || {}) };
+    settings.collapsedCategoryIds = [...new Set((Array.isArray(settings.collapsedCategoryIds) ? settings.collapsedCategoryIds : []).map(String).filter((id) => categoryIds.has(id)))];
     const existingItemHotkeys = new Set((Array.isArray(input.shortcuts) ? input.shortcuts : []).map((item) => normalizeHotkey(item?.hotkey)).filter(Boolean));
     const occupiedHotkeys = new Set(existingItemHotkeys);
     const resolveGlobalHotkey = (key, candidates) => {
@@ -304,7 +306,7 @@ class Store {
         id: String(item.id || crypto.randomUUID()),
         name: String(item.name || displayNameFromTarget(item.target)).slice(0, 100),
         target: normalizeTarget(item.target),
-        type: inferType(item.target, item.type),
+        type: inferType(normalizeTarget(item.target), item.type),
         category: categoryIds.has(categoryRedirects.get(String(item.category)) || item.category) ? (categoryRedirects.get(String(item.category)) || item.category) : DEFAULT_CATEGORY_ID,
         tags: Array.isArray(item.tags) ? item.tags.map(String).slice(0, 12) : [],
         favorite: Boolean(item.favorite),
@@ -577,6 +579,7 @@ class Store {
     if (!['fox', 'custom'].includes(next.petModelPreset)) next.petModelPreset = 'fox';
     if (!['current', 'all'].includes(next.petScreenMode)) next.petScreenMode = 'current';
     if (!['recent', 'name', 'created', 'used', 'manual'].includes(next.sortBy)) next.sortBy = 'recent';
+    next.collapsedCategoryIds = [...new Set((Array.isArray(next.collapsedCategoryIds) ? next.collapsedCategoryIds : []).map(String).filter((id) => this.data.categories.some((category) => category.id === id)))];
     if (!['efficient', 'balanced', 'quality'].includes(next.performanceMode)) next.performanceMode = 'efficient';
     next.autoCheckUpdates = next.autoCheckUpdates !== false;
     next.portableCacheCleanupPrompt = next.portableCacheCleanupPrompt !== false;

@@ -30,7 +30,11 @@ const elements = {
   launcherInput: $('#launcherInput'),
   toast: $('#toast'),
   dropOverlay: $('#dropOverlay'),
-  categoryManager: $('#categoryManager')
+  categoryManager: $('#categoryManager'),
+  confirmModal: $('#confirmModal'),
+  confirmTitle: $('#confirmTitle'),
+  confirmMessage: $('#confirmMessage'),
+  confirmButton: $('#confirmButton')
 };
 
 let state = { shortcuts: [], categories: [], settings: {} };
@@ -43,6 +47,10 @@ let scannedCandidates = [];
 let modelPreview = null;
 let modelPreviewRenderer = null;
 let draggedShortcutId = '';
+let dragIndicatorCard = null;
+let dragInsertAfter = false;
+let confirmResolver = null;
+let confirmRestoreFocus = null;
 let backups = [];
 let storageReport = null;
 let cacheCleanupRunning = false;
@@ -93,6 +101,33 @@ function showToast(message, type = 'success') {
     setTimeout(() => elements.toast.classList.add('hidden'), 220);
   }, 2600);
   elements.toast.classList.remove('hidden');
+}
+
+function closeConfirm(result = false) {
+  if (elements.confirmModal.classList.contains('hidden')) return;
+  elements.confirmModal.classList.add('hidden');
+  document.querySelector('.app-shell').inert = false;
+  const resolve = confirmResolver;
+  const restoreFocus = confirmRestoreFocus;
+  confirmResolver = null;
+  confirmRestoreFocus = null;
+  resolve?.(Boolean(result));
+  requestAnimationFrame(() => restoreFocus?.focus?.());
+}
+
+function confirmAction({ title = '确认操作', message = '', confirmLabel = '确认', danger = true } = {}) {
+  if (confirmResolver) closeConfirm(false);
+  confirmRestoreFocus = document.activeElement;
+  elements.confirmTitle.textContent = title;
+  elements.confirmMessage.textContent = message;
+  elements.confirmButton.textContent = confirmLabel;
+  elements.confirmButton.classList.toggle('danger-button', danger);
+  elements.confirmModal.classList.remove('hidden');
+  document.querySelector('.app-shell').inert = true;
+  return new Promise((resolve) => {
+    confirmResolver = resolve;
+    requestAnimationFrame(() => elements.confirmButton.focus());
+  });
 }
 
 function disposeModelPreviewRenderer() {
@@ -201,7 +236,10 @@ function categoryFamilyIds(id) {
 }
 
 function typeIcon(type) {
-  return { website: '◉', app: '▣', folder: '📁', file: '▤' }[type] || '✦';
+  return {
+    website: '◉', app: '▣', folder: '📁', image: '▧', video: '▶', audio: '♫',
+    document: '▤', archive: '▦', code: '{ }', design: '◇', file: '□'
+  }[type] || '✦';
 }
 
 function displayTarget(item) {
@@ -259,14 +297,32 @@ function renderCategories() {
   elements.allCount.textContent = state.shortcuts.length;
   elements.favoriteCount.textContent = state.shortcuts.filter((item) => item.favorite).length;
   const flatCategories = flattenedCategories();
-  elements.categoryNav.innerHTML = flatCategories.map((category) => {
+  const categoryMap = new Map(flatCategories.map((category) => [category.id, category]));
+  const parentIds = new Set(flatCategories.map((category) => category.parentId).filter(Boolean));
+  const collapsedCategoryIds = new Set(state.settings?.collapsedCategoryIds || []);
+  const isVisible = (category) => {
+    let parentId = category.parentId;
+    const visited = new Set();
+    while (parentId && !visited.has(parentId)) {
+      if (collapsedCategoryIds.has(parentId)) return false;
+      visited.add(parentId);
+      parentId = categoryMap.get(parentId)?.parentId || '';
+    }
+    return true;
+  };
+  elements.categoryNav.innerHTML = flatCategories.filter(isVisible).map((category) => {
     const familyCount = [...categoryFamilyIds(category.id)].reduce((sum, id) => sum + (counts[id] || 0), 0);
+    const hasChildren = parentIds.has(category.id);
+    const expanded = hasChildren && !collapsedCategoryIds.has(category.id);
     return `
-    <button class="nav-item category-nav-item ${currentView === category.id ? 'active' : ''}" data-view="${escapeHtml(category.id)}" data-category-drop="${escapeHtml(category.id)}" style="--category-depth:${category.depth}">
-      <span><i class="category-dot" style="background:${escapeHtml(category.color)};color:${escapeHtml(category.color)}"></i></span>
-      <span>${escapeHtml(category.icon)} ${escapeHtml(category.name)}</span>
-      <b>${familyCount}</b>
-    </button>
+    <div class="category-nav-row" style="--category-depth:${category.depth}">
+      <button class="category-toggle ${hasChildren ? '' : 'is-empty'}" type="button" data-category-toggle="${escapeHtml(category.id)}" aria-label="${expanded ? '收起' : '展开'} ${escapeHtml(category.name)}" aria-expanded="${expanded}">${hasChildren ? '›' : ''}</button>
+      <button class="nav-item category-nav-item ${currentView === category.id ? 'active' : ''}" data-view="${escapeHtml(category.id)}" data-category-drop="${escapeHtml(category.id)}">
+        <span><i class="category-dot" style="background:${escapeHtml(category.color)};color:${escapeHtml(category.color)}"></i></span>
+        <span>${escapeHtml(category.icon)} ${escapeHtml(category.name)}</span>
+        <b>${familyCount}</b>
+      </button>
+    </div>
   `;
   }).join('');
   document.querySelectorAll('#quickNav .nav-item, .settings-nav').forEach((button) => button.classList.toggle('active', button.dataset.view === currentView));
@@ -288,6 +344,7 @@ function renderShortcutCard(item) {
       <div class="card-top">
         ${icon}
         <div class="card-actions">
+          <button class="card-icon-button drag-handle" title="拖动排序" aria-label="拖动 ${escapeHtml(item.name)} 排序">⠿</button>
           <button class="card-icon-button launcher-button ${item.showInLauncher ? 'favorite' : ''}" title="${item.showInLauncher ? '移出快捷启动台' : '加入快捷启动台'}">▦</button>
           <button class="card-icon-button favorite-button ${item.favorite ? 'favorite' : ''}" title="${item.favorite ? '取消收藏' : '收藏'}">★</button>
           <button class="card-icon-button edit-button" title="编辑">✎</button>
@@ -767,11 +824,11 @@ function closeModal() {
   elements.modal.classList.add('hidden');
 }
 
-async function browseAndAdd() {
+async function browseAndAdd(kind = 'file') {
   try {
-    const kind = elements.typeInput.value === 'folder' ? 'folder' : 'file';
     const paths = await window.quickPet.chooseTargets(kind);
     if (!paths.length) return;
+    if (kind === 'folder') elements.typeInput.value = 'folder';
     if (paths.length === 1 && !elements.editId.value) {
       elements.targetInput.value = paths[0];
       if (!elements.nameInput.value) {
@@ -897,6 +954,22 @@ function bindNavigation() {
     navigate('settings');
     setTimeout(() => $('#categorySettingsCard').scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
   });
+  elements.categoryNav.addEventListener('click', async (event) => {
+    const toggle = event.target.closest('[data-category-toggle]');
+    if (!toggle) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const collapsed = new Set(state.settings?.collapsedCategoryIds || []);
+    if (collapsed.has(toggle.dataset.categoryToggle)) collapsed.delete(toggle.dataset.categoryToggle);
+    else collapsed.add(toggle.dataset.categoryToggle);
+    state.settings.collapsedCategoryIds = [...collapsed];
+    renderCategories();
+    try {
+      await window.quickPet.updateSettings({ collapsedCategoryIds: [...collapsed] });
+    } catch (error) {
+      showToast(cleanError(error), 'error');
+    }
+  });
 }
 
 function bindLibraryActions() {
@@ -911,12 +984,13 @@ function bindLibraryActions() {
     const item = state.shortcuts.find((entry) => entry.id === card.dataset.id);
     if (!item) return;
     try {
+      if (event.target.closest('.drag-handle')) return;
       if (event.target.closest('.shortcut-open')) await window.quickPet.openShortcut(item.id);
       else if (event.target.closest('.launcher-button')) await window.quickPet.updateShortcut(item.id, { showInLauncher: !item.showInLauncher });
       else if (event.target.closest('.favorite-button')) await window.quickPet.updateShortcut(item.id, { favorite: !item.favorite });
       else if (event.target.closest('.edit-button')) openModal(item);
       else if (event.target.closest('.delete-button')) {
-        if (confirm(`确定删除“${item.name}”吗？\n只会删除快捷记录，不会删除原文件。`)) {
+        if (await confirmAction({ title: '移除快捷方式', message: `确定移除“${item.name}”吗？\n只会删除快捷记录，不会删除原文件。`, confirmLabel: '移除' })) {
           await window.quickPet.removeShortcut(item.id);
           showToast('已移除快捷方式');
         }
@@ -928,7 +1002,7 @@ function bindLibraryActions() {
   $('#clearAllShortcutsButton').addEventListener('click', async () => {
     const count = state.shortcuts.length;
     if (!count) return showToast('当前没有快捷方式');
-    if (!confirm(`确定清空全部 ${count} 个快捷方式吗？\n只会删除快捷记录，不会删除原文件。`)) return;
+    if (!await confirmAction({ title: '清空全部快捷方式', message: `将移除全部 ${count} 个快捷记录。\n本地原文件不会被删除。`, confirmLabel: `清空 ${count} 项` })) return;
     try {
       const removed = await window.quickPet.removeAllShortcuts();
       showToast(`已清空 ${removed} 个快捷方式`);
@@ -936,7 +1010,10 @@ function bindLibraryActions() {
   });
   elements.shortcutGrid.addEventListener('dragstart', (event) => {
     const card = event.target.closest('.shortcut-card');
-    if (!card) return;
+    if (!card || event.target.closest('button:not(.drag-handle)')) {
+      event.preventDefault();
+      return;
+    }
     draggedShortcutId = card.dataset.id;
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('application/x-quickpet-shortcut', draggedShortcutId);
@@ -946,8 +1023,18 @@ function bindLibraryActions() {
     if (!draggedShortcutId) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
-    document.querySelectorAll('.shortcut-card.drag-before').forEach((card) => card.classList.remove('drag-before'));
-    event.target.closest('.shortcut-card')?.classList.add('drag-before');
+    const nextIndicator = event.target.closest('.shortcut-card');
+    if (nextIndicator?.dataset.id === draggedShortcutId) return;
+    const bounds = nextIndicator?.getBoundingClientRect();
+    const nextInsertAfter = Boolean(bounds && (
+      event.clientY > bounds.top + bounds.height * 0.65
+      || (event.clientY > bounds.top + bounds.height * 0.35 && event.clientX > bounds.left + bounds.width / 2)
+    ));
+    if (nextIndicator === dragIndicatorCard && nextInsertAfter === dragInsertAfter) return;
+    dragIndicatorCard?.classList.remove('drag-before', 'drag-after');
+    dragIndicatorCard = nextIndicator;
+    dragInsertAfter = nextInsertAfter;
+    dragIndicatorCard?.classList.add(dragInsertAfter ? 'drag-after' : 'drag-before');
   });
   elements.shortcutGrid.addEventListener('drop', async (event) => {
     if (!draggedShortcutId) return;
@@ -956,12 +1043,19 @@ function bindLibraryActions() {
     const targetCard = event.target.closest('.shortcut-card');
     const targetItem = state.shortcuts.find((item) => item.id === targetCard?.dataset.id);
     const category = targetItem?.category || (state.categories.some((item) => item.id === currentView) ? currentView : state.shortcuts.find((item) => item.id === draggedShortcutId)?.category);
-    await window.quickPet.updateSettings({ sortBy: 'manual' });
-    await window.quickPet.reorderShortcut(draggedShortcutId, targetCard?.dataset.id || '', category || 'tools');
+    const visibleCards = [...elements.shortcutGrid.querySelectorAll('.shortcut-card')];
+    const targetIndex = targetCard ? visibleCards.indexOf(targetCard) : -1;
+    const beforeCard = dragInsertAfter && targetIndex >= 0
+      ? visibleCards.slice(targetIndex + 1).find((card) => state.shortcuts.find((item) => item.id === card.dataset.id)?.category === category && card.dataset.id !== draggedShortcutId)
+      : targetCard;
+    await window.quickPet.reorderShortcut(draggedShortcutId, beforeCard?.dataset.id || '', category || 'tools');
   });
   elements.shortcutGrid.addEventListener('dragend', () => {
     draggedShortcutId = '';
-    document.querySelectorAll('.shortcut-card.dragging, .shortcut-card.drag-before').forEach((card) => card.classList.remove('dragging', 'drag-before'));
+    dragIndicatorCard?.classList.remove('drag-before', 'drag-after');
+    dragIndicatorCard = null;
+    dragInsertAfter = false;
+    document.querySelector('.shortcut-card.dragging')?.classList.remove('dragging');
   });
   elements.categoryNav.addEventListener('dragover', (event) => {
     const target = event.target.closest('[data-category-drop]');
@@ -977,7 +1071,6 @@ function bindLibraryActions() {
     event.preventDefault();
     event.stopPropagation();
     target.classList.remove('drop-target');
-    await window.quickPet.updateSettings({ sortBy: 'manual' });
     await window.quickPet.reorderShortcut(draggedShortcutId, '', target.dataset.categoryDrop);
     showToast('快捷方式已移动到新分类');
   });
@@ -987,7 +1080,8 @@ function bindLibraryActions() {
 
 function bindModal() {
   elements.form.addEventListener('submit', submitShortcut);
-  $('#browseButton').addEventListener('click', browseAndAdd);
+  $('#browseFileButton').addEventListener('click', () => browseAndAdd('file'));
+  $('#browseFolderButton').addEventListener('click', () => browseAndAdd('folder'));
   $('#modalCloseButton').addEventListener('click', closeModal);
   $('#cancelButton').addEventListener('click', closeModal);
   elements.hotkeyInput.addEventListener('focus', () => elements.hotkeyInput.closest('.hotkey-recorder').classList.add('recording'));
@@ -1002,7 +1096,23 @@ function bindModal() {
   });
   $('#clearHotkeyButton').addEventListener('click', () => { elements.hotkeyInput.value = ''; elements.hotkeyInput.focus(); });
   elements.modal.addEventListener('mousedown', (event) => { if (event.target === elements.modal) closeModal(); });
+  $('#confirmCancelButton').addEventListener('click', () => closeConfirm(false));
+  elements.confirmButton.addEventListener('click', () => closeConfirm(true));
+  elements.confirmModal.addEventListener('mousedown', (event) => { if (event.target === elements.confirmModal) closeConfirm(false); });
   document.addEventListener('keydown', (event) => {
+    if (!elements.confirmModal.classList.contains('hidden')) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeConfirm(false);
+      } else if (event.key === 'Tab') {
+        const controls = [$('#confirmCancelButton'), elements.confirmButton];
+        const index = controls.indexOf(document.activeElement);
+        const nextIndex = event.shiftKey ? (index <= 0 ? controls.length - 1 : index - 1) : (index + 1) % controls.length;
+        event.preventDefault();
+        controls[nextIndex].focus();
+      }
+      return;
+    }
     if (event.key === 'Escape' && !elements.modal.classList.contains('hidden')) closeModal();
     if (event.key === 'Escape' && !$('#scanModal').classList.contains('hidden')) $('#scanModal').classList.add('hidden');
   });
@@ -1188,7 +1298,7 @@ function bindSettings() {
   });
   $('#deleteModelButton').addEventListener('click', async () => {
     const model = activeCustomModel();
-    if (!model || !confirm(`确定删除模型“${model.name}”吗？\n只删除快捷宠保存的副本，不会删除你原来的 GLB。`)) return;
+    if (!model || !await confirmAction({ title: '删除模型副本', message: `确定删除“${model.name}”吗？\n不会删除你原来的 GLB 文件。`, confirmLabel: '删除模型' })) return;
     await window.quickPet.removePetModel(model.id);
     showToast('模型副本已删除，已切换为内置狐狸');
   });
@@ -1197,7 +1307,7 @@ function bindSettings() {
     try { const file = await window.quickPet.exportBackup(); if (file) showToast('备份已导出'); } catch (error) { showToast(cleanError(error), 'error'); }
   });
   $('#importButton').addEventListener('click', async () => {
-    if (!confirm('恢复备份会替换当前的快捷方式和设置，确定继续吗？')) return;
+    if (!await confirmAction({ title: '恢复备份', message: '当前快捷方式和设置将被备份内容替换。', confirmLabel: '恢复备份' })) return;
     try { const result = await window.quickPet.importBackup(); if (result) showToast('备份恢复成功'); } catch (error) { showToast('备份文件无法读取：' + cleanError(error), 'error'); }
   });
   $('#createBackupButton').addEventListener('click', async () => {
@@ -1209,7 +1319,7 @@ function bindSettings() {
     if (!row || !action) return;
     try {
       if (action === 'restore-backup') {
-        if (!confirm('恢复这份备份会替换当前数据，确定继续吗？')) return;
+        if (!await confirmAction({ title: '恢复这份备份', message: '当前快捷方式和设置将被这份备份替换。', confirmLabel: '恢复' })) return;
         await window.quickPet.restoreBackup(row.dataset.backupId);
         showToast('备份恢复成功');
       } else if (action === 'delete-backup') {
@@ -1258,7 +1368,7 @@ function bindSettings() {
     } catch (error) { showToast(cleanError(error), 'error'); }
   });
   $('#resetUsageButton').addEventListener('click', async () => {
-    if (!confirm('确定清空所有本地打开次数和最近使用记录吗？')) return;
+    if (!await confirmAction({ title: '清零使用统计', message: '所有本地打开次数和最近使用时间将被清空。', confirmLabel: '清零' })) return;
     await window.quickPet.resetUsage();
     showToast('本地使用统计已清零');
   });
@@ -1266,7 +1376,7 @@ function bindSettings() {
     try { const file = await window.quickPet.exportMigration(); if (file) showToast('完整迁移包已导出'); } catch (error) { showToast(cleanError(error), 'error'); }
   });
   $('#importMigrationButton').addEventListener('click', async () => {
-    if (!confirm('导入完整迁移包会替换当前快捷方式、分类和设置，确定继续吗？')) return;
+    if (!await confirmAction({ title: '导入完整迁移包', message: '当前快捷方式、分类和设置将被迁移包替换。', confirmLabel: '导入并替换' })) return;
     try { const result = await window.quickPet.importMigration(); if (result) showToast('快捷方式、设置和模型已迁入'); } catch (error) { showToast(cleanError(error), 'error'); }
   });
   $('#refreshStorageButton').addEventListener('click', () => refreshStorageReport().catch((error) => showToast(cleanError(error), 'error')));
@@ -1275,7 +1385,7 @@ function bindSettings() {
     if (cacheCleanupRunning) return;
     const bytes = storageReport?.cleanableCacheBytes || 0;
     if (!bytes) return showToast('当前没有可清理缓存');
-    if (!confirm(`将清理 Electron 缓存和旧版运行文件，预计释放 ${formatBytes(bytes)}。\n当前版本运行文件、个人设置、快捷方式和模型不会被删除。确定继续吗？`)) return;
+    if (!await confirmAction({ title: '清理便携缓存', message: `预计释放 ${formatBytes(bytes)}。\n当前版本、个人设置、快捷方式和模型都会保留。`, confirmLabel: '开始清理', danger: false })) return;
     cacheCleanupRunning = true;
     cacheCleanupProgress = { stage: 'scan', releasedBytes: 0 };
     renderCacheCleanupProgress();
@@ -1308,7 +1418,7 @@ function bindSettings() {
   $('#removeProgramButton').addEventListener('click', async () => {
     const removeData = $('#removeDataInput').checked;
     const action = state.runtime?.portable ? '清理当前便携运行文件并退出' : '移除快捷宠程序与快捷方式';
-    if (!confirm(`${action}${removeData ? '，同时永久删除个人数据、模型和备份' : '，保留个人数据'}。确定继续吗？`)) return;
+    if (!await confirmAction({ title: '移除快捷宠', message: `${action}${removeData ? '，同时永久删除个人数据、模型和备份' : '，保留个人数据'}。`, confirmLabel: '确认移除' })) return;
     try { await window.quickPet.removeProgram(removeData); } catch (error) { showToast(cleanError(error), 'error'); }
   });
   $('#autoCheckUpdatesInput').addEventListener('change', () => window.quickPet.updateSettings({ autoCheckUpdates: $('#autoCheckUpdatesInput').checked }));
@@ -1346,7 +1456,7 @@ function bindSettings() {
     if (!button || !row || button.disabled) return;
     try {
       if (button.dataset.action === 'delete') {
-        if (!confirm('删除分类后，其中的快捷方式会移到“其他”。确定删除吗？')) return;
+        if (!await confirmAction({ title: '删除分类', message: '此分类中的快捷方式会移到“工具”，下级分类会提升为顶级分类。', confirmLabel: '删除分类' })) return;
         await window.quickPet.removeCategory(row.dataset.id);
       } else {
         await window.quickPet.moveCategory(row.dataset.id, button.dataset.action);

@@ -98,7 +98,7 @@
             <article class="settings-card">
               <div class="settings-card-heading"><span class="settings-icon">◐</span><div><h2>界面外观</h2><p>调整主题、强调色和面板大小</p></div></div>
               <div class="setting-row"><label for="themeSelect">主题</label><select id="themeSelect" class="select-control"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></div>
-              <div class="setting-row"><label for="accentInput">强调色</label><input id="accentInput" type="color" value="#171717"></div>
+              <div class="setting-row"><label for="accentInput"><span>点睛色</span><small>用于选中标记、焦点和开关状态</small></label><input id="accentInput" type="color" value="#171717"></div>
               <div class="setting-row range-row"><label for="opacityInput">面板透明度 <span id="opacityValue"></span></label><input id="opacityInput" type="range" min="72" max="100" step="1"></div>
               <div class="setting-row"><label for="panelSizeSelect">面板大小</label><select id="panelSizeSelect" class="select-control"><option value="900x620">紧凑</option><option value="1040x720">标准</option><option value="1220x820">宽大</option></select></div>
               <div class="setting-row"><label for="performanceModeSelect">性能模式</label><select id="performanceModeSelect" class="select-control"><option value="efficient">无感模式</option><option value="balanced">平衡</option><option value="quality">高画质</option></select></div>
@@ -309,9 +309,9 @@
       <div class="modal-heading"><div><p class="eyebrow">快捷收纳</p><h2 id="modalTitle">添加快捷方式</h2></div><button id="modalCloseButton" type="button" class="icon-button">×</button></div>
       <input id="editIdInput" type="hidden">
       <label class="field"><span>名称</span><input id="nameInput" class="text-control" maxlength="100" placeholder="可以留空，我会自动填写"></label>
-      <label class="field"><span>网址或本地路径</span><div class="input-with-button"><input id="targetInput" class="text-control" required placeholder="https://example.com 或 C:\\..."><button id="browseButton" type="button" class="secondary-button">浏览</button></div></label>
+      <label class="field"><span>网址或本地路径</span><div class="input-with-button target-picker"><input id="targetInput" class="text-control" required placeholder="example.com 或 C:\\..."><button id="browseFileButton" type="button" class="secondary-button">选择文件</button><button id="browseFolderButton" type="button" class="ghost-button">选择文件夹</button></div></label>
       <div class="field-grid">
-        <label class="field"><span>类型</span><select id="typeInput" class="select-control"><option value="auto">自动识别</option><option value="website">网站</option><option value="app">程序</option><option value="folder">文件夹</option><option value="file">文件</option></select></label>
+        <label class="field"><span>类型</span><select id="typeInput" class="select-control"><option value="auto">自动识别</option><option value="website">网站</option><option value="app">程序</option><option value="folder">文件夹</option><option value="image">图片</option><option value="video">视频</option><option value="audio">音频</option><option value="document">文档</option><option value="archive">压缩包</option><option value="code">代码</option><option value="design">设计文件</option><option value="file">其他文件</option></select></label>
         <label class="field"><span>分类</span><select id="categoryInput" class="select-control"><option value="">自动分类</option></select></label>
       </div>
       <label class="field"><span>快捷启动组合键</span><div class="hotkey-recorder"><input id="hotkeyInput" class="text-control" readonly placeholder="未设置"><button id="clearHotkeyButton" class="ghost-button" type="button" title="清除组合键">×</button></div></label>
@@ -346,6 +346,14 @@
         </div>
       </div>
       <div class="modal-actions"><button id="modelPreviewCancelButton" class="ghost-button" type="button">取消</button><button id="modelPreviewConfirmButton" class="primary-button" type="button">确认导入</button></div>
+    </div>
+  </div>
+
+  <div id="confirmModal" class="modal-backdrop confirm-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmMessage">
+    <div class="modal-card confirm-modal-card">
+      <div class="confirm-mark" aria-hidden="true">!</div>
+      <div class="confirm-copy"><p class="eyebrow">需要确认</p><h2 id="confirmTitle">确认操作</h2><p id="confirmMessage"></p></div>
+      <div class="modal-actions"><button id="confirmCancelButton" class="ghost-button" type="button">取消</button><button id="confirmButton" class="primary-button" type="button">确认</button></div>
     </div>
   </div>
 

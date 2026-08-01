@@ -1075,6 +1075,27 @@ function registerIpc() {
     const previousLaunchShortcut = store.data.settings.quickLaunchShortcut;
     const previousPanelShortcut = store.data.settings.panelShortcut;
     const settings = store.updateSettings(changes || {});
+    const hotkeyChanges = [
+      ['globalSearchShortcut', 'search', '快捷搜索'],
+      ['quickLaunchShortcut', 'launcher', '快捷启动台'],
+      ['panelShortcut', 'panel', '主快捷面板']
+    ].filter(([key]) => Object.hasOwn(changes || {}, key));
+    if (hotkeyChanges.length) {
+      const registrations = registerSearchShortcut(settings.globalSearchShortcut);
+      const failed = hotkeyChanges.filter(([key, registration]) => registrations[registration] !== settings[key]);
+      if (failed.length) {
+        const restored = store.updateSettings({
+          globalSearchShortcut: previousSearchShortcut,
+          quickLaunchShortcut: previousLaunchShortcut,
+          panelShortcut: previousPanelShortcut
+        });
+        registerSearchShortcut(restored.globalSearchShortcut);
+        syncShortcutHotkeys();
+        broadcastState();
+        throw new Error(`${failed.map(([, , label]) => label).join('、')}组合键已被系统或其他程序占用，已保留原快捷键`);
+      }
+      syncShortcutHotkeys();
+    }
     if (Object.hasOwn(changes || {}, 'launchAtLogin')) {
       app.setLoginItemSettings({
         openAtLogin: settings.launchAtLogin,
@@ -1093,10 +1114,6 @@ function registerIpc() {
     if (petWindow && (settings.petScale !== previousScale || settings.petRenderMode !== previousRenderMode)) resizePetWindow(settings);
     if (panelWindow && (settings.panelWidth !== previousPanelWidth || settings.panelHeight !== previousPanelHeight)) {
       positionPanel();
-    }
-    if (settings.globalSearchShortcut !== previousSearchShortcut || settings.quickLaunchShortcut !== previousLaunchShortcut || settings.panelShortcut !== previousPanelShortcut) {
-      registerSearchShortcut(settings.globalSearchShortcut);
-      syncShortcutHotkeys();
     }
     motionController?.syncToWindow();
     broadcastState();
@@ -1639,13 +1656,60 @@ if (!gotLock) {
             const launcherState = await searchWindow.webContents.executeJavaScript(`({ resultCount: document.querySelectorAll('.launcher-item').length, names: [...document.querySelectorAll('.launcher-item b')].map((item) => item.textContent) })`);
             const launcherScreenshotPath = path.join(process.cwd(), 'tests', 'quick-launcher.png');
             fs.writeFileSync(launcherScreenshotPath, launcherScreenshot.toPNG());
+
+            const testCategory = store.addCategory({ name: '弹窗恢复测试', parentId: 'tools' });
+            broadcastState();
+            navigatePanel('settings');
+            await new Promise((resolve) => setTimeout(resolve, 150));
+            const categoryConfirmOpened = await panelWindow.webContents.executeJavaScript(`(() => {
+              document.querySelector('.category-edit-row[data-id="${testCategory.id}"] button[data-action="delete"]')?.click();
+              return !document.getElementById('confirmModal').classList.contains('hidden') && document.querySelector('.app-shell').inert;
+            })()`);
+            await panelWindow.webContents.executeJavaScript("document.getElementById('confirmButton').click()");
+            await new Promise((resolve) => setTimeout(resolve, 180));
+            const categoryConfirmRecovered = await panelWindow.webContents.executeJavaScript(`(() => {
+              const interactive = !document.querySelector('.app-shell').inert && document.getElementById('confirmModal').classList.contains('hidden');
+              document.getElementById('addButton').click();
+              const addModalOpened = !document.getElementById('shortcutModal').classList.contains('hidden');
+              document.getElementById('modalCloseButton').click();
+              return interactive && addModalOpened;
+            })()`);
+
+            const clearConfirmOpened = await panelWindow.webContents.executeJavaScript(`(() => {
+              document.getElementById('clearAllShortcutsButton').click();
+              return !document.getElementById('confirmModal').classList.contains('hidden') && document.querySelector('.app-shell').inert;
+            })()`);
+            await panelWindow.webContents.executeJavaScript("document.getElementById('confirmButton').click()");
+            await new Promise((resolve) => setTimeout(resolve, 180));
+            const clearConfirmRecovered = await panelWindow.webContents.executeJavaScript(`(() => {
+              const interactive = !document.querySelector('.app-shell').inert && document.getElementById('confirmModal').classList.contains('hidden');
+              document.getElementById('addButton').click();
+              const addModalOpened = !document.getElementById('shortcutModal').classList.contains('hidden');
+              document.getElementById('modalCloseButton').click();
+              return interactive && addModalOpened;
+            })()`);
+
+            const conflictAccelerator = 'CommandOrControl+Alt+F12';
+            globalShortcut.register(conflictAccelerator, () => {});
+            const hotkeyConflict = await panelWindow.webContents.executeJavaScript(`(async () => {
+              const before = (await window.quickPet.getState()).settings.globalSearchShortcut;
+              let message = '';
+              try { await window.quickPet.updateSettings({ globalSearchShortcut: '${conflictAccelerator}' }); }
+              catch (error) { message = String(error?.message || error); }
+              const after = (await window.quickPet.getState()).settings.globalSearchShortcut;
+              return { before, after, message };
+            })()`);
+            globalShortcut.unregister(conflictAccelerator);
             console.log(`ui-test panel-bounds=${JSON.stringify(panelWindow.getBounds())}`);
             console.log(`ui-test sidebar-layout=${JSON.stringify(sidebarLayout)}`);
             console.log(`ui-test search-state=${JSON.stringify(searchState)} launcher-state=${JSON.stringify(launcherState)}`);
+            console.log(`ui-test modal-recovery=${JSON.stringify({ categoryConfirmOpened, categoryConfirmRecovered, clearConfirmOpened, clearConfirmRecovered })} hotkey-conflict=${JSON.stringify(hotkeyConflict)}`);
             console.log(`ui-test screenshots=${screenshotPath},${hotkeysScreenshotPath},${modelScreenshotPath},${automationScreenshotPath},${searchScreenshotPath},${launcherScreenshotPath}`);
             const categoryIds = store.data.categories.filter((item) => !item.id.startsWith('custom-')).map((item) => item.id);
             const panelHotkeyReady = await panelWindow.webContents.executeJavaScript(`document.getElementById('panelShortcutStatus')?.textContent === '已生效'`);
-            exitAutomatedTest(searchState.resultCount === 0 && launcherState.resultCount === 4 && panelHotkeyReady && JSON.stringify(categoryIds) === JSON.stringify(['tools', 'study', 'work']) ? 0 : 6);
+            const modalRecoveryPassed = categoryConfirmOpened && categoryConfirmRecovered && clearConfirmOpened && clearConfirmRecovered;
+            const hotkeyConflictPassed = hotkeyConflict.before === hotkeyConflict.after && hotkeyConflict.message.includes('已被系统或其他程序占用');
+            exitAutomatedTest(searchState.resultCount === 0 && launcherState.resultCount === 1 && panelHotkeyReady && modalRecoveryPassed && hotkeyConflictPassed && JSON.stringify(categoryIds) === JSON.stringify(['tools', 'study', 'work']) ? 0 : 6);
           } catch (error) {
             console.error(error.stack || error.message);
             exitAutomatedTest(6);

@@ -20,6 +20,7 @@ let petStatus = { name: '暖暖', mood: 82, hunger: 76, affection: 20 };
 let enabling3d = false;
 let enablingLive2d = false;
 let currentState = null;
+let activeSkinSource = '';
 let clipboardCandidate = null;
 let clickThrough = null;
 let petDragCandidate = null;
@@ -249,7 +250,11 @@ function applyState(state) {
   const settings = companion ? { ...state.settings, petModelPreset: companion.modelPreset, activeModelId: companion.activeModelId, petRenderMode: companion.renderMode } : state?.settings;
   const activeModel = state?.models?.find((item) => item.id === settings?.activeModelId) || null;
   const customSkin = activeModel?.format === 'live2d' ? activeModel.thumbnailData : settings?.petImageData;
-  petImage.src = customSkin || '../../assets/default-pet.svg';
+  const nextSkinSource = customSkin || '../../assets/default-pet.svg';
+  if (nextSkinSource !== activeSkinSource) {
+    activeSkinSource = nextSkinSource;
+    petImage.src = nextSkinSource;
+  }
   renderMode = activeModel?.format === 'live2d' ? 'live2d' : settings?.petRenderMode === '3d' ? '3d' : '2d';
   petStatus = state?.petStatus || petStatus;
   const nextModelKey = JSON.stringify([settings?.petModelPreset, activeModel?.id, activeModel?.format, activeModel?.transform, activeModel?.animationMap, settings?.performanceMode]);

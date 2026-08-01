@@ -6,6 +6,7 @@ const results = document.querySelector('#globalSearchResults');
 const hint = document.querySelector('#searchHint');
 const shortcutHint = document.querySelector('#shortcutHint');
 const title = document.querySelector('#windowTitle');
+const shell = document.querySelector('.search-shell');
 const modeButtons = [...document.querySelectorAll('[data-mode]')];
 let state = { shortcuts: [], categories: [], settings: {} };
 let visibleItems = [];
@@ -17,7 +18,10 @@ function escapeHtml(value = '') {
 }
 
 function iconFor(type) {
-  return { website: '◎', app: '▣', folder: '▤', file: '◇' }[type] || '◆';
+  return {
+    website: '◎', app: '▣', folder: '▤', image: '▧', video: '▶', audio: '♫',
+    document: '▥', archive: '▦', code: '{ }', design: '◇', file: '□'
+  }[type] || '◆';
 }
 
 function formatHotkey(value = '') {
@@ -44,25 +48,31 @@ function renderSearch() {
   hint.textContent = !query ? '输入后开始搜索' : visibleItems.length ? `${visibleItems.length} 个结果${commandMode ? ' · 命令' : ''}` : '没有匹配的项目';
   results.className = 'search-results';
   results.innerHTML = visibleItems.length ? visibleItems.map((item, index) => {
-    if (item.kind === 'command') return `<button class="result command-result ${index === selectedIndex ? 'active' : ''}" data-index="${index}"><span class="result-icon">${escapeHtml(item.icon)}</span><span class="result-copy"><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.detail)}</small></span><span class="result-source">命令</span></button>`;
+    if (item.kind === 'command') return `<button class="result command-result ${index === selectedIndex ? 'active' : ''}" data-index="${index}" style="--item-index:${index}"><span class="result-icon">${escapeHtml(item.icon)}</span><span class="result-copy"><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.detail)}</small></span><span class="result-source">命令</span></button>`;
     const category = state.categories.find((entry) => entry.id === item.category);
-    return `<button class="result ${index === selectedIndex ? 'active' : ''}" data-index="${index}"><span class="result-icon">${iconFor(item.type)}</span><span class="result-copy"><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.target)}</small></span><span class="result-source">${escapeHtml(category?.name || '工具')}</span></button>`;
+    return `<button class="result ${index === selectedIndex ? 'active' : ''}" data-index="${index}" style="--item-index:${index}"><span class="result-icon">${iconFor(item.type)}</span><span class="result-copy"><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.target)}</small></span><span class="result-source">${escapeHtml(category?.name || '工具')}</span></button>`;
   }).join('') : !query
     ? '<div class="empty search-ready"><i>⌕</i><b>搜索快捷方式</b><span>名称、标签、路径与命令</span></div>'
     : '<div class="empty"><i>⌕</i><b>没有找到</b><span>试试名称、标签或路径中的其他文字</span></div>';
 }
 
 function renderLauncher() {
-  visibleItems = sortedShortcuts().filter((item) => item.showInLauncher || item.favorite).slice(0, 12).map((item) => ({ ...item, kind: 'shortcut' }));
+  visibleItems = sortedShortcuts().filter((item) => item.showInLauncher).slice(0, 12).map((item) => ({ ...item, kind: 'shortcut' }));
   selectedIndex = Math.min(selectedIndex, Math.max(0, visibleItems.length - 1));
-  hint.textContent = visibleItems.length ? `${visibleItems.length} 个常用项目` : '启动台还是空的';
+  hint.textContent = visibleItems.length ? `${visibleItems.length} 个启动项目` : '启动台还是空的';
   results.className = 'search-results launcher-grid';
   results.innerHTML = visibleItems.length ? visibleItems.map((item, index) => `
-    <button class="launcher-item ${index === selectedIndex ? 'active' : ''}" data-index="${index}">
+    <article class="launcher-item ${index === selectedIndex ? 'active' : ''}" data-index="${index}" style="--item-index:${index}">
       <span class="launcher-icon">${iconFor(item.type)}</span>
-      <span><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.favorite ? '收藏' : state.categories.find((entry) => entry.id === item.category)?.name || '工具')}</small></span>
+      <span><b>${escapeHtml(item.name)}</b><small>${escapeHtml(state.categories.find((entry) => entry.id === item.category)?.name || '工具')}</small></span>
       ${item.hotkey ? `<kbd>${escapeHtml(formatHotkey(item.hotkey))}</kbd>` : ''}
-    </button>`).join('') : '<div class="empty launcher-empty"><i>▦</i><b>启动台为空</b><span>从主面板选择要加入的项目</span></div>';
+      <button class="launcher-remove" type="button" data-remove-launcher="${escapeHtml(item.id)}" title="移出快捷启动台" aria-label="将 ${escapeHtml(item.name)} 移出快捷启动台">×</button>
+    </article>`).join('') : '<div class="empty launcher-empty"><i>▦</i><b>启动台为空</b><span>从主面板选择要加入的项目</span></div>';
+}
+
+function updateSelection() {
+  results.querySelectorAll('[data-index]').forEach((element) => element.classList.toggle('active', Number(element.dataset.index) === selectedIndex));
+  results.querySelector('.active')?.scrollIntoView({ block: 'nearest' });
 }
 
 function render() {
@@ -84,6 +94,8 @@ function setMode(nextMode, { focus = true } = {}) {
   input.value = '';
   selectedIndex = 0;
   render();
+  shell.classList.remove('window-enter');
+  requestAnimationFrame(() => shell.classList.add('window-enter'));
   if (focus && mode === 'search') setTimeout(() => input.focus(), 20);
 }
 
@@ -109,9 +121,15 @@ document.addEventListener('keydown', (event) => {
   else if (event.key === 'Enter') return openSelected();
   else return;
   event.preventDefault();
-  render();
+  updateSelection();
 });
-results.addEventListener('click', (event) => {
+results.addEventListener('click', async (event) => {
+  const remove = event.target.closest('[data-remove-launcher]');
+  if (remove) {
+    event.stopPropagation();
+    try { await window.quickPet.updateShortcut(remove.dataset.removeLauncher, { showInLauncher: false }); } catch {}
+    return;
+  }
   const button = event.target.closest('[data-index]');
   if (button) openSelected(Number(button.dataset.index));
 });
