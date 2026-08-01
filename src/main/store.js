@@ -9,7 +9,6 @@ const {
   DEFAULT_CATEGORY_ID,
   DEFAULT_CATEGORIES,
   LEGACY_CATEGORIES,
-  classifyShortcut,
   displayNameFromTarget,
   inferType,
   normalizeTarget
@@ -56,7 +55,7 @@ const DEFAULT_SETTINGS = {
 };
 
 const DEFAULT_PET_STATUS = {
-  name: '暖暖',
+  name: '快捷宠',
   mood: 82,
   hunger: 76,
   affection: 20,
@@ -92,10 +91,10 @@ function cleanAssetReference(value) {
 
 function legacyCategoryDestination(item) {
   const match = LEGACY_CATEGORIES.find((legacy) => legacy.id === String(item?.id || ''));
-  if (!match) return '';
+  if (!match) return null;
   return match.name === String(item.name) && match.icon === String(item.icon) && match.color.toLowerCase() === String(item.color).toLowerCase()
     ? match.destination
-    : '';
+    : null;
 }
 
 function ruleMatches(rule, item) {
@@ -148,7 +147,7 @@ class Store {
     const rawCategories = Array.isArray(input.categories) && input.categories.length
       ? input.categories.filter((item) => item && item.id && item.name)
       : [];
-    const categoryRedirects = new Map(rawCategories.map((item) => [String(item.id), legacyCategoryDestination(item)]).filter(([, destination]) => destination));
+    const categoryRedirects = new Map(rawCategories.map((item) => [String(item.id), legacyCategoryDestination(item)]).filter(([, destination]) => destination !== null));
     const categories = rawCategories.length
       ? rawCategories.filter((item) => !categoryRedirects.has(String(item.id))).map((item, index) => ({
         id: String(item.id),
@@ -160,22 +159,18 @@ class Store {
       }))
       : base.categories.map((item, index) => ({ ...item, parentId: '', sortOrder: index }));
     const categoryIds = new Set(categories.map((item) => item.id));
-    for (const defaultCategory of DEFAULT_CATEGORIES) {
-      if (categoryIds.has(defaultCategory.id)) continue;
-      categories.push({ ...defaultCategory, parentId: '', sortOrder: categories.length });
-      categoryIds.add(defaultCategory.id);
-    }
     categories.forEach((item, index) => {
       if (!categoryIds.has(item.parentId) || item.parentId === item.id) item.parentId = '';
       if (!Number.isFinite(item.sortOrder)) item.sortOrder = index;
     });
-    const builtInIds = new Set(DEFAULT_CATEGORIES.map((item) => item.id));
-    const orderedCategories = [
-      ...DEFAULT_CATEGORIES.map((defaultCategory) => categories.find((item) => item.id === defaultCategory.id)),
-      ...categories.filter((item) => !builtInIds.has(item.id)).sort((a, b) => a.sortOrder - b.sortOrder)
-    ].filter(Boolean);
+    const orderedCategories = [...categories].sort((a, b) => a.sortOrder - b.sortOrder);
     orderedCategories.forEach((item, index) => { item.sortOrder = index; });
     categories.splice(0, categories.length, ...orderedCategories);
+    const resolveCategoryId = (value) => {
+      const rawId = String(value || '');
+      const resolvedId = categoryRedirects.has(rawId) ? categoryRedirects.get(rawId) : rawId;
+      return categoryIds.has(resolvedId) ? resolvedId : DEFAULT_CATEGORY_ID;
+    };
 
     const rawModels = Array.isArray(input.models) ? input.models : [];
     const models = rawModels.filter((item) => item && item.id && item.fileName).map((item) => {
@@ -252,13 +247,13 @@ class Store {
       settings.activeModelId = '';
       settings.petModelName = '';
     }
-    const rules = (Array.isArray(input.rules) ? input.rules : []).filter((item) => item && item.value).map((item) => ({
+    const rules = (Array.isArray(input.rules) ? input.rules : []).filter((item) => item && item.value && resolveCategoryId(item.category)).map((item) => ({
       id: String(item.id || crypto.randomUUID()),
       name: String(item.name || '自动分类规则').slice(0, 40),
       field: ['name', 'target', 'type', 'extension'].includes(item.field) ? item.field : 'target',
       operator: ['contains', 'equals', 'starts'].includes(item.operator) ? item.operator : 'contains',
       value: String(item.value).slice(0, 120),
-      category: categoryIds.has(categoryRedirects.get(String(item.category)) || item.category) ? (categoryRedirects.get(String(item.category)) || item.category) : DEFAULT_CATEGORY_ID,
+      category: resolveCategoryId(item.category),
       tags: Array.isArray(item.tags) ? item.tags.map(String).filter(Boolean).slice(0, 8) : [],
       enabled: item.enabled !== false
     }));
@@ -276,7 +271,7 @@ class Store {
       id: String(item.id || crypto.randomUUID()),
       name: String(item.name || path.basename(item.path)).slice(0, 80),
       path: path.resolve(String(item.path)),
-      category: categoryIds.has(categoryRedirects.get(String(item.category)) || item.category) ? (categoryRedirects.get(String(item.category)) || item.category) : DEFAULT_CATEGORY_ID,
+      category: resolveCategoryId(item.category),
       tags: Array.isArray(item.tags) ? item.tags.map(String).filter(Boolean).slice(0, 8) : ['动态文件夹'],
       enabled: item.enabled !== false
     }));
@@ -307,7 +302,7 @@ class Store {
         name: String(item.name || displayNameFromTarget(item.target)).slice(0, 100),
         target: normalizeTarget(item.target),
         type: inferType(normalizeTarget(item.target), item.type),
-        category: categoryIds.has(categoryRedirects.get(String(item.category)) || item.category) ? (categoryRedirects.get(String(item.category)) || item.category) : DEFAULT_CATEGORY_ID,
+        category: resolveCategoryId(item.category),
         tags: Array.isArray(item.tags) ? item.tags.map(String).slice(0, 12) : [],
         favorite: Boolean(item.favorite),
         showInLauncher: Boolean(item.showInLauncher),
@@ -331,7 +326,7 @@ class Store {
       notifications,
       companions,
       petStatus: {
-        name: String(status.name || DEFAULT_PET_STATUS.name).trim().slice(0, 20) || DEFAULT_PET_STATUS.name,
+        name: String(status.name === '暖暖' ? DEFAULT_PET_STATUS.name : status.name || DEFAULT_PET_STATUS.name).trim().slice(0, 20) || DEFAULT_PET_STATUS.name,
         mood: Math.min(100, Math.max(0, Number.isFinite(Number(status.mood)) ? Number(status.mood) : DEFAULT_PET_STATUS.mood)),
         hunger: Math.min(100, Math.max(0, Number.isFinite(Number(status.hunger)) ? Number(status.hunger) : DEFAULT_PET_STATUS.hunger)),
         affection: Math.min(100, Math.max(0, Number.isFinite(Number(status.affection)) ? Number(status.affection) : 0)),
@@ -409,7 +404,6 @@ class Store {
       throw error;
     }
     const type = inferType(target, input.type);
-    const autoCategory = classifyShortcut({ name: input.name, target, type });
     const availableCategories = new Set(this.data.categories.map((item) => item.id));
     const baseItem = { name: input.name || displayNameFromTarget(target), target, type };
     const matchedRule = this.data.rules.find((rule) => ruleMatches(rule, baseItem));
@@ -421,9 +415,7 @@ class Store {
       name: String(input.name || displayNameFromTarget(target)).trim().slice(0, 100),
       target,
       type,
-      category: availableCategories.has(input.category)
-        ? input.category
-        : matchedRule?.category || autoCategory,
+      category: availableCategories.has(input.category) ? input.category : matchedRule?.category || DEFAULT_CATEGORY_ID,
       tags: [...new Set([
         ...(Array.isArray(input.tags) ? input.tags : []),
         ...(matchedRule?.tags || [])
@@ -440,7 +432,7 @@ class Store {
       iconPath: cleanAssetReference(input.iconPath),
       iconBackground: /^#[0-9a-f]{6}$/i.test(input.iconBackground || '') ? input.iconBackground : '',
       hotkey,
-      sortOrder: Math.max(-1, ...this.data.shortcuts.filter((entry) => entry.category === (availableCategories.has(input.category) ? input.category : matchedRule?.category || autoCategory)).map((entry) => Number(entry.sortOrder) || 0)) + 1
+      sortOrder: Math.max(-1, ...this.data.shortcuts.filter((entry) => entry.category === (availableCategories.has(input.category) ? input.category : matchedRule?.category || DEFAULT_CATEGORY_ID)).map((entry) => Number(entry.sortOrder) || 0)) + 1
     };
     if (this.assetStore && item.iconData) {
       item.iconPath = this.assetStore.saveDataUrl(item.iconData, 'shortcuts', item.id);
@@ -462,7 +454,7 @@ class Store {
       item.type = inferType(item.target, changes.type);
     } else if (typeof changes.type === 'string') item.type = inferType(item.target, changes.type);
     if (typeof changes.name === 'string' && changes.name.trim()) item.name = changes.name.trim().slice(0, 100);
-    if (typeof changes.category === 'string' && this.data.categories.some((entry) => entry.id === changes.category)) item.category = changes.category;
+    if (typeof changes.category === 'string' && (!changes.category || this.data.categories.some((entry) => entry.id === changes.category))) item.category = changes.category;
     if (Array.isArray(changes.tags)) item.tags = changes.tags.map((tag) => String(tag).trim()).filter(Boolean).slice(0, 12);
     if (typeof changes.favorite === 'boolean') item.favorite = changes.favorite;
     if (typeof changes.showInLauncher === 'boolean') item.showInLauncher = changes.showInLauncher;
@@ -848,14 +840,13 @@ class Store {
   }
 
   removeCategory(id) {
-    if (DEFAULT_CATEGORIES.some((item) => item.id === id)) throw new Error('内置分类不能删除');
     if (!this.data.categories.some((item) => item.id === id)) return false;
     this.data.categories = this.data.categories.filter((item) => item.id !== id);
     for (const category of this.data.categories) {
       if (category.parentId === id) category.parentId = '';
     }
     for (const shortcut of this.data.shortcuts) {
-      if (shortcut.category === id) shortcut.category = DEFAULT_CATEGORY_ID;
+      if (shortcut.category === id) shortcut.category = '';
     }
     this.save();
     return true;

@@ -6,12 +6,12 @@
 
 **把快捷方式交给一只会走路的桌宠。**
 
-面向 Windows 的桌宠式快捷收纳工具。集中管理网址、程序、文件和文件夹，自动分类，随用随开。
+面向 Windows 的桌宠式快捷收纳工具。集中管理网址、程序、文件和文件夹，自由分类，随用随开。
 
 <p>
   <img alt="Windows 10 和 11 x64" src="https://img.shields.io/badge/Windows-10%20%7C%2011%20x64-111111?style=flat-square&logo=windows&logoColor=white">
-  <img alt="版本 0.12.3" src="https://img.shields.io/badge/version-0.12.3-111111?style=flat-square">
-  <img alt="114 项测试通过" src="https://img.shields.io/badge/tests-114%20passed-111111?style=flat-square">
+  <img alt="版本 0.12.4" src="https://img.shields.io/badge/version-0.12.4-111111?style=flat-square">
+  <img alt="121 项测试通过" src="https://img.shields.io/badge/tests-121%20passed-111111?style=flat-square">
   <img alt="MIT 许可" src="https://img.shields.io/badge/license-MIT-111111?style=flat-square">
   <a href="https://github.com/YunsuStudio/QuickPet/actions/workflows/ci.yml"><img alt="CI 状态" src="https://github.com/YunsuStudio/QuickPet/actions/workflows/ci.yml/badge.svg"></a>
 </p>
@@ -31,13 +31,13 @@
 | 项目 | 说明 |
 | --- | --- |
 | 支持系统 | Windows 10 / 11 x64 |
-| 当前文件 | `QuickPet-Portable-0.12.3-x64.exe` |
+| 当前文件 | `QuickPet-Portable-0.12.4-x64.exe` |
 | 安装方式 | 无需安装，不自动创建快捷方式 |
 | 首次运行 | 在 EXE 同目录创建 `QuickPet-Portable-Cache` |
 | 数据位置 | 默认保存在本机，可备份和完整迁移 |
 
 1. 把 EXE 放进可写的固定文件夹，例如 `D:\QuickPet`。
-2. 双击运行，无需手动解压。
+2. 双击运行，无需手动解压；桌宠与快捷面板会同时出现。
 3. 按住桌宠本体即可拖动，单击桌宠打开快捷面板；把文件或链接拖到桌宠本体即可收纳。
 
 当前 EXE 尚未进行商业代码签名，Windows 可能显示 SmartScreen 提示。请只从本仓库的 Releases 获取文件，并核对发布说明。
@@ -117,11 +117,11 @@ npm test
 npm run build
 ```
 
-构建产物位于 `dist/QuickPet-Portable-0.12.3-x64.exe`。项目不会生成 NSIS、IExpress 或其他安装包。
+构建产物位于 `dist/QuickPet-Portable-0.12.4-x64.exe`。项目不会生成 NSIS、IExpress 或其他安装包。
 
 ## 测试状态
 
-当前 114 项自动测试全部通过，覆盖多级分类、确认弹窗恢复、详细类型识别、手动排序、协议启动、搜索、启动台、组合键冲突回滚、桌宠投喂与拖动、透明区域点击、模型导入、备份恢复、便携缓存、发布构建兼容性和不同 DPI 双屏接缝等主要流程。
+当前 121 项自动测试全部通过，覆盖无内置分类、多级分类、确认弹窗恢复、详细类型识别、手动排序、协议启动、搜索、启动台、组合键冲突回滚、桌宠投喂与拖动、透明区域点击、模型导入、备份恢复、便携缓存、发布构建兼容性和不同 DPI 双屏接缝等主要流程。
 
 性能记录：CPU `0.68%`、峰值内存 `332.6 MB`、3D 空闲帧率 `30.08 FPS`。
 

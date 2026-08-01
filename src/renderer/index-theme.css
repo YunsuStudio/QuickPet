@@ -101,10 +101,13 @@ body {
   font-size: 13px;
 }
 
-button:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
 input:focus-visible,
 select:focus-visible {
-  outline: 2px solid var(--action);
+  outline: 2px solid var(--text);
   outline-offset: 2px;
 }
 
@@ -220,7 +223,7 @@ h1 { font-family: "KaiTi", "Microsoft YaHei UI", sans-serif; font-size: 24px; fo
   font-size: 11px;
 }
 .select-control:focus,
-.text-control:focus { border-color: var(--action); box-shadow: 0 0 0 2px color-mix(in srgb, var(--action) 14%, transparent); }
+.text-control:focus { border-color: var(--text); box-shadow: 0 0 0 2px color-mix(in srgb, var(--text) 10%, transparent); }
 .primary-button,
 .secondary-button,
 .ghost-button,
@@ -270,8 +273,8 @@ h1 { font-family: "KaiTi", "Microsoft YaHei UI", sans-serif; font-size: 24px; fo
 .shortcut-card.drag-after { box-shadow: inset -3px 0 0 var(--accent); }
 .shortcut-icon { width: 38px; height: 38px; flex-basis: 38px; border: 1px solid var(--border); border-radius: 50%; background: var(--surface-2); color: var(--text); font-size: 18px; }
 .shortcut-icon img { width: 24px; height: 24px; }
-.card-actions { gap: 2px; }
-.card-icon-button { width: 26px; height: 26px; border-radius: 5px; transition: transform var(--motion-fast) var(--ease-out), opacity var(--motion-fast) var(--ease-out); }
+.card-actions { gap: 1px; padding: 2px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); }
+.card-icon-button { width: 25px; height: 25px; border-radius: 4px; opacity: 1; transition: transform var(--motion-fast) var(--ease-out), background-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out); }
 .card-icon-button:active { transform: scale(.9); }
 .card-icon-button.favorite { color: var(--accent); }
 .drag-handle { opacity: .64; cursor: grab; font-size: 15px; }
@@ -293,6 +296,10 @@ h1 { font-family: "KaiTi", "Microsoft YaHei UI", sans-serif; font-size: 24px; fo
 
 .settings-heading { margin-bottom: 10px; }
 .settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.settings-section-divider { grid-column: 1 / -1; min-height: 34px; margin-top: 8px; display: flex; align-items: baseline; gap: 9px; border-bottom: 1px solid var(--border); }
+.settings-section-divider:first-child { margin-top: 0; }
+.settings-section-divider b { font-family: "KaiTi", "Microsoft YaHei UI", sans-serif; font-size: 14px; }
+.settings-section-divider span { color: var(--text-soft); font-size: 9px; }
 .settings-card {
   padding: 16px;
   border: 1px solid var(--border);
@@ -305,6 +312,17 @@ h1 { font-family: "KaiTi", "Microsoft YaHei UI", sans-serif; font-size: 24px; fo
 .settings-card-heading h2 { font-family: "KaiTi", "Microsoft YaHei UI", sans-serif; font-size: 15px; font-weight: 700; }
 .settings-card-heading p { font-size: 9px; line-height: 1.45; }
 .settings-icon { width: 30px; height: 30px; flex-basis: 30px; border: 1px solid var(--action); border-radius: 50%; background: var(--action); color: var(--action-text); font-size: 12px; }
+.settings-brand-icon { overflow: hidden; border-color: var(--border); background: var(--surface-2); }
+.settings-brand-icon img { width: 24px; height: 24px; object-fit: contain; }
+.about-meta { margin-bottom: 10px; display: grid; gap: 1px; border: 1px solid var(--border); border-radius: 5px; overflow: hidden; background: var(--border); }
+.about-meta > div { min-height: 31px; padding: 0 9px; display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--surface-2); }
+.about-meta span { color: var(--text-soft); font-size: 9px; }
+.about-meta b { font-size: 10px; font-weight: 650; }
+.project-link-button { width: 100%; min-height: 40px; margin-bottom: 7px; padding: 0 9px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 9px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); color: var(--text); text-align: left; }
+.project-link-button:hover { border-color: var(--text); background: var(--surface-2); }
+.project-link-button span { color: var(--text-soft); font-size: 9px; }
+.project-link-button b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 9px/1.2 "Cascadia Mono", "Consolas", monospace; }
+.project-link-button i { font-style: normal; }
 .heading-actions { gap: 6px; }
 .setting-row { min-height: 42px; }
 .switch-row { min-height: 48px; }
@@ -541,9 +559,16 @@ input[type="range"], input[type="checkbox"] { accent-color: var(--accent); }
 .category-chip { font-size: 10px; }
 
 button:focus-visible,
-input:focus-visible,
-select:focus-visible,
 summary:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+.category-nav-empty { margin: 8px 10px 0; color: var(--chrome-muted); font-size: 9px; }
+.category-manager-empty { min-height: 84px; display: grid; place-content: center; gap: 4px; color: var(--text-soft); text-align: center; }
+.category-manager-empty b { color: var(--text); font-size: 11px; }
+.category-manager-empty span { font-size: 9px; }

@@ -7,11 +7,13 @@ const hint = document.querySelector('#searchHint');
 const shortcutHint = document.querySelector('#shortcutHint');
 const title = document.querySelector('#windowTitle');
 const shell = document.querySelector('.search-shell');
+const content = document.querySelector('.search-content');
 const modeButtons = [...document.querySelectorAll('[data-mode]')];
 let state = { shortcuts: [], categories: [], settings: {} };
 let visibleItems = [];
 let selectedIndex = 0;
 let mode = 'search';
+let modeTransitionToken = 0;
 
 function escapeHtml(value = '') {
   return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
@@ -50,7 +52,7 @@ function renderSearch() {
   results.innerHTML = visibleItems.length ? visibleItems.map((item, index) => {
     if (item.kind === 'command') return `<button class="result command-result ${index === selectedIndex ? 'active' : ''}" data-index="${index}" style="--item-index:${index}"><span class="result-icon">${escapeHtml(item.icon)}</span><span class="result-copy"><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.detail)}</small></span><span class="result-source">命令</span></button>`;
     const category = state.categories.find((entry) => entry.id === item.category);
-    return `<button class="result ${index === selectedIndex ? 'active' : ''}" data-index="${index}" style="--item-index:${index}"><span class="result-icon">${iconFor(item.type)}</span><span class="result-copy"><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.target)}</small></span><span class="result-source">${escapeHtml(category?.name || '工具')}</span></button>`;
+    return `<button class="result ${index === selectedIndex ? 'active' : ''}" data-index="${index}" style="--item-index:${index}"><span class="result-icon">${iconFor(item.type)}</span><span class="result-copy"><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.target)}</small></span><span class="result-source">${escapeHtml(category?.name || '未分类')}</span></button>`;
   }).join('') : !query
     ? '<div class="empty search-ready"><i>⌕</i><b>搜索快捷方式</b><span>名称、标签、路径与命令</span></div>'
     : '<div class="empty"><i>⌕</i><b>没有找到</b><span>试试名称、标签或路径中的其他文字</span></div>';
@@ -64,7 +66,7 @@ function renderLauncher() {
   results.innerHTML = visibleItems.length ? visibleItems.map((item, index) => `
     <article class="launcher-item ${index === selectedIndex ? 'active' : ''}" data-index="${index}" style="--item-index:${index}">
       <span class="launcher-icon">${iconFor(item.type)}</span>
-      <span><b>${escapeHtml(item.name)}</b><small>${escapeHtml(state.categories.find((entry) => entry.id === item.category)?.name || '工具')}</small></span>
+      <span><b>${escapeHtml(item.name)}</b><small>${escapeHtml(state.categories.find((entry) => entry.id === item.category)?.name || '未分类')}</small></span>
       ${item.hotkey ? `<kbd>${escapeHtml(formatHotkey(item.hotkey))}</kbd>` : ''}
       <button class="launcher-remove" type="button" data-remove-launcher="${escapeHtml(item.id)}" title="移出快捷启动台" aria-label="将 ${escapeHtml(item.name)} 移出快捷启动台">×</button>
     </article>`).join('') : '<div class="empty launcher-empty"><i>▦</i><b>启动台为空</b><span>从主面板选择要加入的项目</span></div>';
@@ -89,13 +91,31 @@ function render() {
   results.querySelector('.active')?.scrollIntoView({ block: 'nearest' });
 }
 
-function setMode(nextMode, { focus = true } = {}) {
-  mode = nextMode === 'launcher' ? 'launcher' : 'search';
+async function setMode(nextMode, { focus = true, animate = true } = {}) {
+  const next = nextMode === 'launcher' ? 'launcher' : 'search';
+  const token = ++modeTransitionToken;
+  const shouldAnimate = animate && next !== mode && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (shouldAnimate) {
+    shell.dataset.transitionDirection = next === 'launcher' ? 'forward' : 'backward';
+    content.classList.remove('mode-enter');
+    content.classList.add('mode-leave');
+    await new Promise((resolve) => setTimeout(resolve, 85));
+    if (token !== modeTransitionToken) return;
+  }
+  mode = next;
   input.value = '';
   selectedIndex = 0;
   render();
-  shell.classList.remove('window-enter');
-  requestAnimationFrame(() => shell.classList.add('window-enter'));
+  if (shouldAnimate) {
+    content.classList.remove('mode-leave');
+    content.classList.add('mode-enter', 'mode-items');
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (token === modeTransitionToken) content.classList.remove('mode-enter');
+    }));
+    setTimeout(() => {
+      if (token === modeTransitionToken) content.classList.remove('mode-items');
+    }, 240);
+  }
   if (focus && mode === 'search') setTimeout(() => input.focus(), 20);
 }
 
@@ -136,4 +156,4 @@ results.addEventListener('click', async (event) => {
 
 window.quickPet.getState().then((next) => { state = next; render(); input.focus(); });
 window.quickPet.onStateChanged((next) => { state = next; render(); });
-window.quickPet.onSearchFocus((nextMode) => setMode(nextMode));
+window.quickPet.onSearchFocus((nextMode) => setMode(nextMode, { animate: false }));

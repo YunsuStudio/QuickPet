@@ -39,6 +39,7 @@ contextBridge.exposeInMainWorld('quickPet', {
   togglePanel: (force) => ipcRenderer.invoke('panel:toggle', force),
   hideWindow: () => ipcRenderer.invoke('window:hide'),
   minimizeWindow: () => ipcRenderer.invoke('window:minimize'),
+  openProjectPage: () => ipcRenderer.invoke('app:open-project'),
   chooseTargets: (kind) => ipcRenderer.invoke('shortcut:choose-targets', kind),
   addPaths: (paths) => ipcRenderer.invoke('shortcut:add-paths', paths),
   addShortcut: (input) => ipcRenderer.invoke('shortcut:add', input),

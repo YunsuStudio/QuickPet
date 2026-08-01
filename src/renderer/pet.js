@@ -16,7 +16,7 @@ let lastMotion = { mode: 'idle', direction: 1, action: '' };
 let threeFailed = false;
 let activeModelKey = '';
 let activeModelConfig = null;
-let petStatus = { name: '暖暖', mood: 82, hunger: 76, affection: 20 };
+let petStatus = { name: '快捷宠', mood: 82, hunger: 76, affection: 20 };
 let enabling3d = false;
 let enablingLive2d = false;
 let currentState = null;
@@ -250,7 +250,7 @@ function applyState(state) {
   const settings = companion ? { ...state.settings, petModelPreset: companion.modelPreset, activeModelId: companion.activeModelId, petRenderMode: companion.renderMode } : state?.settings;
   const activeModel = state?.models?.find((item) => item.id === settings?.activeModelId) || null;
   const customSkin = activeModel?.format === 'live2d' ? activeModel.thumbnailData : settings?.petImageData;
-  const nextSkinSource = customSkin || '../../assets/default-pet.svg';
+  const nextSkinSource = customSkin || '../../assets/app-icon.png';
   if (nextSkinSource !== activeSkinSource) {
     activeSkinSource = nextSkinSource;
     petImage.src = nextSkinSource;

@@ -95,7 +95,7 @@
           <div id="safeModeBanner" class="safe-mode-banner hidden"><span><b>安全模式</b><small>上次运行异常，当前使用 2D 低负载配置</small></span><button id="exitSafeModeButton" class="secondary-button">恢复原配置</button></div>
 
           <div class="settings-grid">
-            <article class="settings-card">
+            <article id="appearanceCard" class="settings-card">
               <div class="settings-card-heading"><span class="settings-icon">◐</span><div><h2>界面外观</h2><p>调整主题、强调色和面板大小</p></div></div>
               <div class="setting-row"><label for="themeSelect">主题</label><select id="themeSelect" class="select-control"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></div>
               <div class="setting-row"><label for="accentInput"><span>点睛色</span><small>用于选中标记、焦点和开关状态</small></label><input id="accentInput" type="color" value="#171717"></div>
@@ -105,9 +105,9 @@
               <p id="performanceModeHint" class="maintenance-copy performance-hint"></p>
             </article>
 
-            <article class="settings-card pet-settings-card">
-              <div class="settings-card-heading"><span class="settings-icon">♡</span><div><h2>桌宠档案</h2><p>名字、心情和日常互动都会保存在本机</p></div></div>
-              <label class="pet-name-field"><span>名字</span><input id="petNameInput" class="text-control" maxlength="20" value="暖暖"></label>
+            <article id="petProfileCard" class="settings-card pet-settings-card">
+              <div class="settings-card-heading"><span class="settings-icon settings-brand-icon"><img src="../../assets/app-icon.png" alt=""></span><div><h2>桌宠档案</h2><p>名字、心情和日常互动都会保存在本机</p></div></div>
+              <label class="pet-name-field"><span>名字</span><input id="petNameInput" class="text-control" maxlength="20" value="快捷宠"></label>
               <div class="pet-vitals">
                 <div><span>心情 <b id="moodValue">82</b></span><i><em id="moodBar"></em></i></div>
                 <div><span>饱食 <b id="hungerValue">76</b></span><i><em id="hungerBar"></em></i></div>
@@ -115,15 +115,15 @@
               </div>
               <div class="button-row"><button id="feedPetButton" class="secondary-button">喂食</button><button id="playPetButton" class="ghost-button">陪它玩</button></div>
               <div class="setting-row"><label for="petRenderModeSelect">桌宠模式</label><select id="petRenderModeSelect" class="select-control"><option value="2d">2D 自定义皮肤</option><option value="3d">3D 动态动物</option></select></div>
-              <div class="skin-preview"><img id="skinPreview" src="../../assets/default-pet.svg" alt="桌宠预览"><span id="skinName">默认暖暖猫</span></div>
+              <div class="skin-preview"><img id="skinPreview" src="../../assets/app-icon.png" alt="桌宠预览"><span id="skinName">快捷宠程序图标</span></div>
               <p id="skinStatus" class="skin-status">默认皮肤已经是透明背景</p>
               <label class="switch-row"><span><b>上传后自动抠图</b><small>照片只在本机处理，不会上传</small></span><input id="autoRemoveBackgroundInput" type="checkbox"><i></i></label>
               <div class="button-row skin-buttons"><button id="chooseSkinButton" class="secondary-button">选择图片</button><button id="processSkinButton" class="ghost-button">重新抠图</button><button id="useOriginalSkinButton" class="ghost-button">使用原图</button><button id="resetSkinButton" class="ghost-button">恢复默认</button></div>
               <div class="setting-row range-row"><label for="petScaleInput">桌宠大小 <span id="petScaleValue"></span></label><input id="petScaleInput" type="range" min="70" max="145" step="5"></div>
             </article>
 
-            <article class="settings-card settings-card-wide model-center-card">
-              <div class="settings-card-heading model-heading"><span class="settings-icon">3D</span><div><h2>模型预览仓库</h2><p>支持 GLB、VRM 与 Live2D model3.json；旧版白模会自动恢复贴图</p></div><div class="heading-actions"><button id="chooseModelButton" class="secondary-button">＋ 导入模型</button><button id="openModelLibraryButton" class="ghost-button">推荐模型</button></div></div>
+            <article id="modelCenterCard" class="settings-card settings-card-wide model-center-card">
+              <div class="settings-card-heading model-heading"><span class="settings-icon settings-brand-icon"><img src="../../assets/app-icon.png" alt=""></span><div><h2>模型预览仓库</h2><p>支持 GLB、VRM 与 Live2D model3.json；旧版白模会自动恢复贴图</p></div><div class="heading-actions"><button id="chooseModelButton" class="secondary-button">＋ 导入模型</button><button id="openModelLibraryButton" class="ghost-button">推荐模型</button></div></div>
               <div id="modelLibraryList" class="model-library-list"></div>
               <div id="activeModelEditor" class="model-editor hidden">
                 <div class="model-editor-title"><div><b>模型校正与动作</b><small id="petModelName">尚未导入 GLB</small></div><button id="deleteModelButton" class="text-button danger-text">删除当前模型</button></div>
@@ -145,7 +145,7 @@
               </div>
             </article>
 
-            <article class="settings-card">
+            <article id="petBehaviorCard" class="settings-card">
               <div class="settings-card-heading"><span class="settings-icon">〽</span><div><h2>动作与性格</h2><p>散步、奔跑、观察、休息和夜间睡觉</p></div></div>
               <label class="switch-row"><span><b>自然行为</b><small>随机坐下、观察、伸懒腰、睡觉或奔跑</small></span><input id="naturalBehaviorInput" type="checkbox"><i></i></label>
               <label class="switch-row"><span><b>自动散步</b><small>在活动范围内自行移动</small></span><input id="autoWalkInput" type="checkbox"><i></i></label>
@@ -153,7 +153,7 @@
               <div class="setting-row range-row"><label for="walkSpeedInput">行走速度 <span id="walkSpeedValue"></span></label><input id="walkSpeedInput" type="range" min="18" max="110" step="4"></div>
             </article>
 
-            <article class="settings-card">
+            <article id="petRangeCard" class="settings-card">
               <div class="settings-card-heading"><span class="settings-icon">▣</span><div><h2>桌面活动范围</h2><p>多显示器、全屏隐藏、吸边和边缘留白</p></div></div>
               <div class="setting-row"><label for="petScreenModeSelect">活动屏幕</label><select id="petScreenModeSelect" class="select-control"><option value="current">当前屏幕</option><option value="all">跨所有屏幕</option></select></div>
               <label class="switch-row"><span><b>桌宠保持置顶</b><small>始终显示在其他窗口上方</small></span><input id="alwaysOnTopInput" type="checkbox"><i></i></label>
@@ -162,19 +162,19 @@
               <div class="setting-row range-row"><label for="activityPaddingInput">边缘留白 <span id="activityPaddingValue"></span></label><input id="activityPaddingInput" type="range" min="0" max="300" step="10"></div>
             </article>
 
-            <article class="settings-card">
+            <article id="batchImportCard" class="settings-card">
               <div class="settings-card-heading"><span class="settings-icon">⇣</span><div><h2>批量收纳</h2><p>先扫描预览，勾选后再导入，不会直接塞满列表</p></div></div>
               <div class="scan-grid"><button class="secondary-button scan-button" data-scan="desktop">扫描桌面</button><button class="ghost-button scan-button" data-scan="start-menu">扫描开始菜单</button><button class="ghost-button scan-button" data-scan="bookmarks">导入浏览器书签</button><button class="primary-button scan-button" data-scan="all">扫描全部</button></div>
             </article>
 
-            <article class="settings-card global-hotkeys-card">
+            <article id="globalHotkeysCard" class="settings-card global-hotkeys-card">
               <div class="settings-card-heading"><span class="settings-icon">⌕</span><div><h2>全局呼出</h2><p>分别设置搜索、启动台与主快捷面板</p></div></div>
               <label class="hotkey-setting"><span>快捷搜索</span><div class="hotkey-recorder"><input id="globalSearchShortcutInput" class="text-control" readonly><button id="clearGlobalSearchShortcutButton" class="ghost-button" type="button" title="恢复默认快捷键">↺</button></div><small id="globalSearchShortcutStatus"></small></label>
               <label class="hotkey-setting"><span>快捷启动台</span><div class="hotkey-recorder"><input id="quickLaunchShortcutInput" class="text-control" readonly><button id="clearQuickLaunchShortcutButton" class="ghost-button" type="button" title="恢复默认快捷键">↺</button></div><small id="quickLaunchShortcutStatus"></small></label>
               <label class="hotkey-setting"><span>主快捷面板</span><div class="hotkey-recorder"><input id="panelShortcutInput" class="text-control" readonly><button id="clearPanelShortcutButton" class="ghost-button" type="button" title="恢复默认快捷键">↺</button></div><small id="panelShortcutStatus"></small></label>
             </article>
 
-            <article class="settings-card settings-card-wide">
+            <article id="itemHotkeysCard" class="settings-card settings-card-wide">
               <div class="settings-card-heading"><span class="settings-icon">⌘</span><div><h2>快捷键台</h2><p>选择需要快捷启动的项目后设置组合键</p></div></div>
               <div class="hotkey-assignment">
                 <select id="hotkeyShortcutSelect" class="select-control"><option value="">选择快捷项目</option></select>
@@ -184,12 +184,12 @@
               <div id="hotkeyCenterList" class="hotkey-center-list"></div>
             </article>
 
-            <article class="settings-card">
+            <article id="usageStatsCard" class="settings-card">
               <div class="settings-card-heading"><span class="settings-icon">▥</span><div><h2>本地使用统计</h2><p>只记录打开次数与最近使用时间</p></div><button id="resetUsageButton" class="ghost-button">清零</button></div>
               <div id="usageStatsList" class="usage-stats-list"></div>
             </article>
 
-            <article class="settings-card">
+            <article id="migrationCard" class="settings-card">
               <div class="settings-card-heading"><span class="settings-icon">⇄</span><div><h2>换机迁移</h2><p>快捷方式、分类、设置与模型合并导出</p></div></div>
               <div class="button-stack"><button id="exportMigrationButton" class="secondary-button">导出完整迁移包</button><button id="importMigrationButton" class="ghost-button">导入完整迁移包</button></div>
             </article>
@@ -206,28 +206,29 @@
               </form>
             </article>
 
-            <article class="settings-card">
+            <article id="startupDataCard" class="settings-card">
               <div class="settings-card-heading"><span class="settings-icon">↻</span><div><h2>启动与数据</h2><p>设置开机启动和本地备份</p></div></div>
               <label class="switch-row"><span><b>开机自动启动</b><small>登录 Windows 后显示桌宠</small></span><input id="launchAtLoginInput" type="checkbox"><i></i></label>
               <div class="button-stack"><button id="createBackupButton" class="secondary-button">立即备份</button><button id="exportButton" class="ghost-button">导出到文件</button><button id="importButton" class="ghost-button">从文件恢复</button></div>
               <div id="backupList" class="backup-list"></div>
             </article>
 
-            <article class="settings-card">
+            <article id="maintenanceToolsCard" class="settings-card">
               <div class="settings-card-heading"><span class="settings-icon">✓</span><div><h2>维护工具</h2><p>检查失效的网址、文件和程序</p></div></div>
               <p class="maintenance-copy">检查只在你点击时进行。网址会发送一次轻量连接请求，本地项目会检查路径是否存在。</p>
               <button id="settingsCheckButton" class="secondary-button wide">检查全部快捷方式</button>
-              <p class="version-line">快捷宠 <span id="versionText">v0.1.0</span> · 数据保存在本机</p>
             </article>
 
-            <article class="settings-card">
-              <div class="settings-card-heading"><span class="settings-icon">↻</span><div><h2>软件更新</h2><p>检查 YunsuStudio/QuickPet 的 GitHub Releases</p></div></div>
+            <article id="aboutUpdateCard" class="settings-card about-update-card">
+              <div class="settings-card-heading"><span class="settings-icon settings-brand-icon"><img src="../../assets/app-icon.png" alt=""></span><div><h2>关于与更新</h2><p>版本、作者与 GitHub 项目</p></div></div>
+              <div class="about-meta"><div><span>当前版本</span><b id="versionText">v0.1.0</b></div><div><span>开发与版权</span><b>云间溯工作室</b></div><div><span>开源许可</span><b>MIT License</b></div></div>
+              <button id="openProjectButton" class="project-link-button" type="button"><span>项目地址</span><b>github.com/YunsuStudio/QuickPet</b><i>↗</i></button>
               <label class="switch-row"><span><b>启动时检查更新</b></span><input id="autoCheckUpdatesInput" type="checkbox"><i></i></label>
               <p id="updateStatus" class="maintenance-copy">尚未检查</p>
               <div class="button-row"><button id="checkUpdateButton" class="secondary-button">检查更新</button><button id="downloadUpdateButton" class="primary-button hidden">下载新版本</button></div>
             </article>
 
-            <article class="settings-card settings-card-wide maintenance-desk">
+            <article id="storageCleanupCard" class="settings-card settings-card-wide maintenance-desk">
               <div class="settings-card-heading"><span class="settings-icon">⌫</span><div><h2>存储与清理</h2><p>查看占用、清理缓存或移除便携运行文件</p></div><button id="refreshStorageButton" class="ghost-button">刷新</button></div>
               <label class="switch-row portable-cleanup-switch"><span><b>发现旧版缓存时提醒</b><small>更新后询问是否删除旧版运行文件，不影响个人数据</small></span><input id="portableCacheCleanupPromptInput" type="checkbox"><i></i></label>
               <div id="storageReport" class="storage-report"></div>

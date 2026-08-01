@@ -192,7 +192,7 @@ async function chooseAndPreviewModel() {
 }
 
 function categoryById(id) {
-  return state.categories.find((category) => category.id === id) || { name: '其他', icon: '✨', color: '#9aa0b5' };
+  return state.categories.find((category) => category.id === id) || { name: '未分类', icon: '◇', color: '#777770' };
 }
 
 function flattenedCategories() {
@@ -310,7 +310,7 @@ function renderCategories() {
     }
     return true;
   };
-  elements.categoryNav.innerHTML = flatCategories.filter(isVisible).map((category) => {
+  elements.categoryNav.innerHTML = flatCategories.length ? flatCategories.filter(isVisible).map((category) => {
     const familyCount = [...categoryFamilyIds(category.id)].reduce((sum, id) => sum + (counts[id] || 0), 0);
     const hasChildren = parentIds.has(category.id);
     const expanded = hasChildren && !collapsedCategoryIds.has(category.id);
@@ -324,12 +324,13 @@ function renderCategories() {
       </button>
     </div>
   `;
-  }).join('');
+  }).join('') : '<p class="category-nav-empty">还没有分类</p>';
   document.querySelectorAll('#quickNav .nav-item, .settings-nav').forEach((button) => button.classList.toggle('active', button.dataset.view === currentView));
 }
 
 function renderShortcutCard(item) {
   const category = categoryById(item.category);
+  const manualSort = state.settings?.sortBy === 'manual';
   const favicon = faviconFor(item);
   const tags = (item.tags || []).slice(0, 1).map((tag) => `<span class="tag-chip">#${escapeHtml(tag)}</span>`).join('');
   const hotkeyStatus = state.hotkeyRegistrations?.[item.id];
@@ -340,11 +341,11 @@ function renderShortcutCard(item) {
     ? `<span class="shortcut-icon"><span class="icon-fallback">${typeIcon(item.type)}</span><img class="favicon" src="${escapeHtml(favicon)}" alt=""></span>`
     : `<span class="shortcut-icon">${typeIcon(item.type)}</span>`;
   return `
-    <article class="shortcut-card" data-id="${escapeHtml(item.id)}" draggable="true" style="--category-color:${escapeHtml(category.color)}">
+    <article class="shortcut-card" data-id="${escapeHtml(item.id)}" draggable="${manualSort}" style="--category-color:${escapeHtml(category.color)}">
       <div class="card-top">
         ${icon}
         <div class="card-actions">
-          <button class="card-icon-button drag-handle" title="拖动排序" aria-label="拖动 ${escapeHtml(item.name)} 排序">⠿</button>
+          ${manualSort ? `<button class="card-icon-button drag-handle" title="拖动排序" aria-label="拖动 ${escapeHtml(item.name)} 排序">⠿</button>` : ''}
           <button class="card-icon-button launcher-button ${item.showInLauncher ? 'favorite' : ''}" title="${item.showInLauncher ? '移出快捷启动台' : '加入快捷启动台'}">▦</button>
           <button class="card-icon-button favorite-button ${item.favorite ? 'favorite' : ''}" title="${item.favorite ? '取消收藏' : '收藏'}">★</button>
           <button class="card-icon-button edit-button" title="编辑">✎</button>
@@ -372,7 +373,7 @@ function renderLibrary() {
     recent: ['使用记录', '最近使用']
   };
   const currentCategory = categoryById(currentView);
-  const [eyebrow, title] = titles[currentView] || ['自动分类', `${currentCategory.icon} ${currentCategory.name}`];
+  const [eyebrow, title] = titles[currentView] || ['自定义分类', `${currentCategory.icon} ${currentCategory.name}`];
   elements.currentEyebrow.textContent = eyebrow;
   elements.viewTitle.textContent = title;
 
@@ -392,7 +393,7 @@ function renderLibrary() {
 function renderCategoryOptions() {
   const selected = elements.categoryInput.value;
   const categories = flattenedCategories();
-  elements.categoryInput.innerHTML = '<option value="">自动分类</option>' + categories.map((category) =>
+  elements.categoryInput.innerHTML = '<option value="">未分类</option>' + categories.map((category) =>
     `<option value="${escapeHtml(category.id)}">${'　'.repeat(category.depth)}${escapeHtml(category.icon)} ${escapeHtml(category.name)}</option>`
   ).join('');
   elements.categoryInput.value = state.categories.some((category) => category.id === selected) ? selected : '';
@@ -406,7 +407,7 @@ function renderCategoryOptions() {
 
 function renderCategoryManager() {
   const categories = flattenedCategories();
-  elements.categoryManager.innerHTML = categories.map((category, index) => {
+  elements.categoryManager.innerHTML = categories.length ? categories.map((category, index) => {
     const parentOptions = categories.filter((item) => item.id !== category.id).map((item) =>
       `<option value="${escapeHtml(item.id)}" ${category.parentId === item.id ? 'selected' : ''}>${'　'.repeat(item.depth)}${escapeHtml(item.icon)} ${escapeHtml(item.name)}</option>`
     ).join('');
@@ -419,11 +420,11 @@ function renderCategoryManager() {
       <div class="row-buttons">
         <button data-action="up" title="上移" ${index === 0 ? 'disabled' : ''}>↑</button>
         <button data-action="down" title="下移" ${index === state.categories.length - 1 ? 'disabled' : ''}>↓</button>
-        <button data-action="delete" class="danger" title="删除" ${['tools', 'study', 'work'].includes(category.id) ? 'disabled' : ''}>×</button>
+        <button data-action="delete" class="danger" title="删除">×</button>
       </div>
     </div>
   `;
-  }).join('');
+  }).join('') : '<div class="category-manager-empty"><b>还没有分类</b><span>在下方创建第一个分类，之后可以继续添加下级分类。</span></div>';
 }
 
 function activeCustomModel() {
@@ -434,18 +435,17 @@ function renderModelLibrary() {
   const settings = state.settings || {};
   const customModels = state.models || [];
   const cards = [
-    { preset: 'fox', name: '内置动画狐狸', meta: '有贴图 · 3 个动作 · 官方示例资产', icon: '🦊' },
+    { preset: 'fox', name: '内置动画狐狸', meta: '有贴图 · 3 个动作 · 官方示例资产' },
     ...customModels.map((model) => ({
       id: model.id,
       name: model.name,
       meta: `${(model.format || 'glb').toUpperCase()} · 性能 ${model.performance?.grade || 'B'} · ${model.materialStatus === 'fixed-legacy' ? '旧材质已修复' : model.textureCount ? `${model.textureCount} 张贴图` : '模型无贴图'} · ${model.animationNames.length} 个动作`,
-      icon: model.name.toLowerCase().includes('chicken') || model.name.includes('鸡') ? '🐓' : '🐾',
       thumbnailData: model.thumbnailData
     }))
   ];
   $('#modelLibraryList').innerHTML = cards.map((model) => {
     const active = model.id ? settings.petModelPreset === 'custom' && settings.activeModelId === model.id : settings.petModelPreset === model.preset;
-    return `<button class="model-card ${active ? 'active' : ''}" ${model.id ? `data-model-id="${escapeHtml(model.id)}"` : `data-model-preset="${escapeHtml(model.preset)}"`}><span class="model-card-icon">${model.thumbnailData ? `<img src="${escapeHtml(model.thumbnailData)}" alt="">` : model.icon}</span><span><b>${escapeHtml(model.name)}</b><small>${escapeHtml(model.meta)}</small></span><em>${active ? '使用中' : '切换'}</em></button>`;
+    return `<button class="model-card ${active ? 'active' : ''}" ${model.id ? `data-model-id="${escapeHtml(model.id)}"` : `data-model-preset="${escapeHtml(model.preset)}"`}><span class="model-card-icon"><img src="${model.thumbnailData ? escapeHtml(model.thumbnailData) : '../../assets/app-icon.png'}" alt=""></span><span><b>${escapeHtml(model.name)}</b><small>${escapeHtml(model.meta)}</small></span><em>${active ? '使用中' : '切换'}</em></button>`;
   }).join('');
 
   const model = activeCustomModel();
@@ -602,9 +602,30 @@ function renderUpdateStatus() {
   $('#downloadUpdateButton').textContent = update.downloadUrl ? '下载新版本' : '查看发布页';
 }
 
+function organizeSettingsLayout() {
+  const grid = document.querySelector('#settingsView .settings-grid');
+  const groups = [
+    ['常用入口', '搜索、面板与界面', ['globalHotkeysCard', 'appearanceCard']],
+    ['桌宠与动作', '形象、行为与活动范围', ['petProfileCard', 'petBehaviorCard', 'petRangeCard', 'modelCenterCard']],
+    ['整理与效率', '分类、批量收纳与项目快捷键', ['categorySettingsCard', 'batchImportCard', 'itemHotkeysCard', 'usageStatsCard']],
+    ['数据与程序', '备份、迁移、维护与版本信息', ['startupDataCard', 'migrationCard', 'maintenanceToolsCard', 'aboutUpdateCard', 'storageCleanupCard']]
+  ];
+  grid.querySelectorAll('.settings-section-divider').forEach((element) => element.remove());
+  for (const [title, detail, cardIds] of groups) {
+    const divider = document.createElement('div');
+    divider.className = 'settings-section-divider';
+    divider.innerHTML = `<b>${title}</b><span>${detail}</span>`;
+    grid.append(divider);
+    for (const id of cardIds) {
+      const card = document.getElementById(id);
+      if (card) grid.append(card);
+    }
+  }
+}
+
 function renderSettings() {
   const settings = state.settings || {};
-  const status = state.petStatus || { name: '暖暖', mood: 82, hunger: 76, affection: 20 };
+  const status = state.petStatus || { name: '快捷宠', mood: 82, hunger: 76, affection: 20 };
   $('#themeSelect').value = settings.theme || 'system';
   $('#accentInput').value = /^#[0-9a-f]{6}$/i.test(settings.accent || '') ? settings.accent : '#171717';
   $('#opacityInput').value = Math.round((settings.panelOpacity || .98) * 100);
@@ -650,8 +671,8 @@ function renderSettings() {
   const is3dMode = settings.petRenderMode === '3d';
   const model = activeCustomModel();
   const modelDisplayName = settings.petModelPreset === 'custom' ? (model?.name || '自定义模型不存在') : '内置动画狐狸';
-  $('#skinPreview').src = settings.petImageData || '../../assets/default-pet.svg';
-  $('#skinName').textContent = is3dMode ? modelDisplayName : (settings.petImageName || '默认暖暖猫');
+  $('#skinPreview').src = settings.petImageData || '../../assets/app-icon.png';
+  $('#skinName').textContent = is3dMode ? modelDisplayName : (settings.petImageName || '快捷宠程序图标');
   $('#autoRemoveBackgroundInput').checked = settings.autoRemoveBackground !== false;
   const hasCustomSkin = Boolean(settings.petOriginalImageData);
   const isAnimatedSkin = /\.gif$/i.test(settings.petImageName || '');
@@ -1010,7 +1031,7 @@ function bindLibraryActions() {
   });
   elements.shortcutGrid.addEventListener('dragstart', (event) => {
     const card = event.target.closest('.shortcut-card');
-    if (!card || event.target.closest('button:not(.drag-handle)')) {
+    if (state.settings?.sortBy !== 'manual' || !card || !event.target.closest('.drag-handle')) {
       event.preventDefault();
       return;
     }
@@ -1441,6 +1462,7 @@ function bindSettings() {
       if (result) showToast(/^https:\/\//i.test(result) ? '已打开 GitHub 发布页' : '更新包已下载并通过校验');
     } catch (error) { showToast(cleanError(error), 'error'); }
   });
+  $('#openProjectButton').addEventListener('click', () => window.quickPet.openProjectPage());
 
   $('#addCategoryForm').addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -1456,7 +1478,7 @@ function bindSettings() {
     if (!button || !row || button.disabled) return;
     try {
       if (button.dataset.action === 'delete') {
-        if (!await confirmAction({ title: '删除分类', message: '此分类中的快捷方式会移到“工具”，下级分类会提升为顶级分类。', confirmLabel: '删除分类' })) return;
+        if (!await confirmAction({ title: '删除分类', message: '此分类中的快捷方式会变为未分类，下级分类会提升为顶级分类。', confirmLabel: '删除分类' })) return;
         await window.quickPet.removeCategory(row.dataset.id);
       } else {
         await window.quickPet.moveCategory(row.dataset.id, button.dataset.action);
@@ -1556,6 +1578,7 @@ async function initialize() {
       window.quickPet.listBackups(),
       window.quickPet.getStorageReport()
     ]);
+    organizeSettingsLayout();
     renderAll();
     bindNavigation();
     bindLibraryActions();

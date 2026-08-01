@@ -79,7 +79,8 @@ html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 body { font-family: "Microsoft YaHei UI", "Segoe UI", system-ui, sans-serif; color: var(--text); background: var(--bg); font-size: 14px; }
 button, input, select { font: inherit; }
 button { color: inherit; }
-button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 28%, transparent); outline-offset: 1px; }
+button:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 28%, transparent); outline-offset: 1px; }
+input:focus-visible, select:focus-visible { outline: 2px solid var(--text); outline-offset: 1px; }
 .hidden { display: none !important; }
 
 .app-shell { width: 100%; height: 100%; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); }
@@ -120,7 +121,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 h1 { margin: 0; font-size: 25px; line-height: 1.2; letter-spacing: 0; }
 .toolbar-actions { display: flex; align-items: center; gap: 9px; }
 .search-box { width: min(290px, 28vw); height: 40px; display: flex; align-items: center; gap: 7px; padding: 0 11px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface); color: var(--text-soft); transition: border .2s, box-shadow .2s; }
-.search-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 13%, transparent); }
+.search-box:focus-within { border-color: var(--text); box-shadow: 0 0 0 2px color-mix(in srgb, var(--text) 14%, transparent); }
 .search-box input { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; color: var(--text); }
 .search-box input::placeholder { color: var(--text-soft); opacity: .75; }
 .primary-button, .secondary-button, .ghost-button, .text-button { min-height: 38px; border-radius: 10px; padding: 0 15px; cursor: pointer; font-weight: 700; transition: transform .15s, background .15s, border .15s; }
@@ -135,7 +136,7 @@ h1 { margin: 0; font-size: 25px; line-height: 1.2; letter-spacing: 0; }
 .text-button:hover { text-decoration: underline; }
 .wide { width: 100%; }
 .select-control, .text-control { height: 40px; border: 1px solid var(--border); border-radius: 10px; padding: 0 11px; background: var(--surface); color: var(--text); outline: none; }
-.select-control:focus, .text-control:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 13%, transparent); }
+.select-control:focus, .text-control:focus { border-color: var(--text); box-shadow: 0 0 0 2px color-mix(in srgb, var(--text) 14%, transparent); }
 .toolbar .select-control { max-width: 118px; }
 
 .summary-bar { height: 38px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 13px; color: var(--text-soft); font-size: 12px; }
@@ -149,8 +150,7 @@ h1 { margin: 0; font-size: 25px; line-height: 1.2; letter-spacing: 0; }
 .shortcut-icon img { width: 26px; height: 26px; object-fit: contain; }
 .card-actions { display: flex; align-items: center; gap: 1px; }
 .card-icon-button, .icon-button { border: 0; background: transparent; color: var(--text-soft); cursor: pointer; border-radius: 8px; }
-.card-icon-button { width: 28px; height: 28px; opacity: 0; transition: opacity .15s, background .15s; }
-.shortcut-card:hover .card-icon-button, .card-icon-button.favorite { opacity: 1; }
+.card-icon-button { width: 28px; height: 28px; opacity: 1; transition: background .15s, color .15s, transform .15s; }
 .card-icon-button:hover { background: var(--surface-3); color: var(--text); }
 .card-icon-button.favorite { color: #e4a629; }
 .shortcut-open { min-width: 0; flex: 1; margin-top: 13px; padding: 0; border: 0; background: transparent; text-align: left; cursor: pointer; }

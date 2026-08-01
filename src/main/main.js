@@ -937,6 +937,7 @@ function registerIpc() {
   });
   ipcMain.handle('window:hide', () => panelWindow?.hide());
   ipcMain.handle('window:minimize', () => panelWindow?.minimize());
+  ipcMain.handle('app:open-project', () => shell.openExternal('https://github.com/YunsuStudio/QuickPet'));
   ipcMain.handle('search:hide', () => searchWindow?.hide());
   ipcMain.handle('search:toggle', (_event, force, mode = 'search') => toggleSearch(force, mode));
 
@@ -1508,7 +1509,7 @@ if (!gotLock) {
     }
     registerIpc();
     createPetWindow();
-    if (isSmokeTest || isUiTest || isAcceptanceTest || isCacheProgressUiTest) createPanelWindow();
+    createPanelWindow(!isAutomatedTest);
     motionController = new PetMotionController({
       getWindow: () => petWindow,
       getSettings: () => ({ ...store.data.settings, petStatus: store.data.petStatus }),
@@ -1608,6 +1609,8 @@ if (!gotLock) {
     if (isUiTest) {
       whenWebContentsLoaded(panelWindow.webContents, () => {
         store.removeAllShortcuts();
+        store.data.categories = [];
+        store.data.rules = [];
         for (let index = 0; index < 12; index += 1) {
           store.addShortcut({
             name: index === 0 ? '一个名称很长但不应该挤坏布局的 Steam 游戏快捷方式' : `快捷项目 ${index + 1}`,
@@ -1619,9 +1622,14 @@ if (!gotLock) {
         }
         store.save();
         broadcastState();
-        navigatePanel('settings');
+        panelWindow.webContents.executeJavaScript("document.querySelector('[data-view=\"all\"]')?.click()");
         setTimeout(async () => {
           try {
+            const shortcutsScreenshot = await panelWindow.webContents.capturePage();
+            const shortcutsScreenshotPath = path.join(process.cwd(), 'tests', 'shortcuts-center.png');
+            fs.writeFileSync(shortcutsScreenshotPath, shortcutsScreenshot.toPNG());
+            navigatePanel('settings');
+            await new Promise((resolve) => setTimeout(resolve, 250));
             const screenshot = await panelWindow.webContents.capturePage();
             const sidebarLayout = await panelWindow.webContents.executeJavaScript(`(() => {
               const rect = (selector) => { const element = document.querySelector(selector); const box = element.getBoundingClientRect(); return { top: box.top, bottom: box.bottom, height: box.height, scrollHeight: element.scrollHeight, clientHeight: element.clientHeight }; };
@@ -1657,7 +1665,7 @@ if (!gotLock) {
             const launcherScreenshotPath = path.join(process.cwd(), 'tests', 'quick-launcher.png');
             fs.writeFileSync(launcherScreenshotPath, launcherScreenshot.toPNG());
 
-            const testCategory = store.addCategory({ name: '弹窗恢复测试', parentId: 'tools' });
+            const testCategory = store.addCategory({ name: '弹窗恢复测试' });
             broadcastState();
             navigatePanel('settings');
             await new Promise((resolve) => setTimeout(resolve, 150));
@@ -1704,12 +1712,12 @@ if (!gotLock) {
             console.log(`ui-test sidebar-layout=${JSON.stringify(sidebarLayout)}`);
             console.log(`ui-test search-state=${JSON.stringify(searchState)} launcher-state=${JSON.stringify(launcherState)}`);
             console.log(`ui-test modal-recovery=${JSON.stringify({ categoryConfirmOpened, categoryConfirmRecovered, clearConfirmOpened, clearConfirmRecovered })} hotkey-conflict=${JSON.stringify(hotkeyConflict)}`);
-            console.log(`ui-test screenshots=${screenshotPath},${hotkeysScreenshotPath},${modelScreenshotPath},${automationScreenshotPath},${searchScreenshotPath},${launcherScreenshotPath}`);
+            console.log(`ui-test screenshots=${shortcutsScreenshotPath},${screenshotPath},${hotkeysScreenshotPath},${modelScreenshotPath},${automationScreenshotPath},${searchScreenshotPath},${launcherScreenshotPath}`);
             const categoryIds = store.data.categories.filter((item) => !item.id.startsWith('custom-')).map((item) => item.id);
             const panelHotkeyReady = await panelWindow.webContents.executeJavaScript(`document.getElementById('panelShortcutStatus')?.textContent === '已生效'`);
             const modalRecoveryPassed = categoryConfirmOpened && categoryConfirmRecovered && clearConfirmOpened && clearConfirmRecovered;
             const hotkeyConflictPassed = hotkeyConflict.before === hotkeyConflict.after && hotkeyConflict.message.includes('已被系统或其他程序占用');
-            exitAutomatedTest(searchState.resultCount === 0 && launcherState.resultCount === 1 && panelHotkeyReady && modalRecoveryPassed && hotkeyConflictPassed && JSON.stringify(categoryIds) === JSON.stringify(['tools', 'study', 'work']) ? 0 : 6);
+            exitAutomatedTest(searchState.resultCount === 0 && launcherState.resultCount === 1 && panelHotkeyReady && modalRecoveryPassed && hotkeyConflictPassed && categoryIds.length === 0 ? 0 : 6);
           } catch (error) {
             console.error(error.stack || error.message);
             exitAutomatedTest(6);

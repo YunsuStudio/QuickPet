@@ -1,11 +1,8 @@
 async (page) => {
   await page.addInitScript(() => {
-    const categories = [
-      { id: 'work', name: '工作', icon: 'W', color: '#333333', parentId: '', sortOrder: 0 },
-      { id: 'other', name: '其他', icon: 'O', color: '#777777', parentId: '', sortOrder: 1 }
-    ];
+    const categories = [];
     const state = {
-      appVersion: '0.11.10',
+      appVersion: '0.12.4',
       categories,
       shortcuts: [],
       models: [],
@@ -18,9 +15,9 @@ async (page) => {
       hotkeyRegistrations: {},
       runtime: {
         globalShortcutRegistrations: { search: true, launcher: true },
-        update: { status: 'idle', currentVersion: '0.11.21' }
+        update: { status: 'idle', currentVersion: '0.12.4' }
       },
-      petStatus: { name: 'Nuan Nuan', mood: 82, hunger: 76, affection: 20 },
+      petStatus: { name: '快捷宠', mood: 82, hunger: 76, affection: 20 },
       settings: {
         theme: 'system',
         accent: '#171717',
@@ -47,6 +44,7 @@ async (page) => {
         activityPadding: 10,
         globalSearchShortcut: 'Alt+Space',
         quickLaunchShortcut: 'CommandOrControl+Alt+Space',
+        panelShortcut: 'CommandOrControl+Shift+Space',
         clipboardMonitor: true,
         launchAtLogin: false,
         autoCheckUpdates: true,
@@ -106,6 +104,7 @@ async (page) => {
       onStateChanged: (callback) => { listeners.push(callback); return () => {}; },
       onNavigateSettings: () => () => {},
       onNavigateAutomation: () => () => {},
+      openProjectPage: async () => true,
       rendererReady: () => {},
       updateSettings: async (changes) => {
         Object.assign(state.settings, changes);

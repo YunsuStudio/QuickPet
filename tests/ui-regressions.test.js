@@ -64,3 +64,54 @@ test('全局快捷键注册冲突会恢复旧设置并明确提示用户', () =>
   assert.match(main, /globalSearchShortcut: previousSearchShortcut/);
   assert.match(main, /组合键已被系统或其他程序占用，已保留原快捷键/);
 });
+
+test('快捷卡片操作常驻且拖动按钮只在手动排序显示', () => {
+  const app = read('src/renderer/app.js');
+  const styles = read('src/renderer/styles.css');
+  assert.doesNotMatch(styles, /\.card-icon-button\s*\{[^}]*opacity:\s*0/s);
+  assert.match(app, /manualSort[\s\S]*drag-handle/);
+  assert.match(app, /draggable="\$\{manualSort\}"/);
+});
+
+test('输入控件焦点使用中性色而不是点睛色', () => {
+  const theme = read('src/renderer/index-theme.css');
+  assert.match(theme, /input:focus-visible[\s\S]{0,180}var\(--text\)/);
+  assert.doesNotMatch(theme, /input:focus-visible[\s\S]{0,180}var\(--accent\)/);
+});
+
+test('默认 2D 桌宠和桌宠设置统一使用程序图标', () => {
+  const app = read('src/renderer/app.js');
+  const pet = read('src/renderer/pet.js');
+  const html = read('src/renderer/index.html');
+  assert.match(app, /assets\/app-icon\.png/);
+  assert.match(pet, /assets\/app-icon\.png/);
+  assert.ok((html.match(/assets\/app-icon\.png/g) || []).length >= 2);
+});
+
+test('设置页按优先级分组并提供项目与作者信息', () => {
+  const app = read('src/renderer/app.js');
+  const html = read('src/renderer/index.html');
+  assert.match(app, /organizeSettingsLayout/);
+  assert.match(html, /id="openProjectButton"/);
+  assert.match(html, /云间溯工作室/);
+});
+
+test('搜索和启动台切换使用内容级过渡而不是重播整个窗口', () => {
+  const search = read('src/renderer/search.js');
+  const css = read('src/renderer/search.css');
+  assert.match(search, /modeTransitionToken/);
+  assert.match(css, /mode-leave/);
+  assert.match(css, /mode-enter/);
+});
+
+test('搜索和启动台不会把未分类项目显示成已移除的内置分类', () => {
+  const search = read('src/renderer/search.js');
+  assert.match(search, /category\?\.name \|\| '未分类'/);
+  assert.equal((search.match(/\|\| '未分类'/g) || []).length, 2);
+  assert.doesNotMatch(search, /category\?\.name \|\| '工具'/);
+});
+
+test('正常启动会同时创建并显示桌宠与主面板', () => {
+  const main = read('src/main/main.js');
+  assert.match(main, /createPetWindow\(\);\s*\n\s*createPanelWindow\(!isAutomatedTest\)/);
+});
