@@ -10,8 +10,8 @@
 
 <p>
   <img alt="Windows 10 和 11 x64" src="https://img.shields.io/badge/Windows-10%20%7C%2011%20x64-111111?style=flat-square&logo=windows&logoColor=white">
-  <img alt="版本 0.12.4" src="https://img.shields.io/badge/version-0.12.4-111111?style=flat-square">
-  <img alt="121 项测试通过" src="https://img.shields.io/badge/tests-121%20passed-111111?style=flat-square">
+  <img alt="版本 0.12.5" src="https://img.shields.io/badge/version-0.12.5-111111?style=flat-square">
+  <img alt="128 项测试通过" src="https://img.shields.io/badge/tests-128%20passed-111111?style=flat-square">
   <img alt="MIT 许可" src="https://img.shields.io/badge/license-MIT-111111?style=flat-square">
   <a href="https://github.com/YunsuStudio/QuickPet/actions/workflows/ci.yml"><img alt="CI 状态" src="https://github.com/YunsuStudio/QuickPet/actions/workflows/ci.yml/badge.svg"></a>
 </p>
@@ -31,7 +31,7 @@
 | 项目 | 说明 |
 | --- | --- |
 | 支持系统 | Windows 10 / 11 x64 |
-| 当前文件 | `QuickPet-Portable-0.12.4-x64.exe` |
+| 当前文件 | `QuickPet-Portable-0.12.5-x64.exe` |
 | 安装方式 | 无需安装，不自动创建快捷方式 |
 | 首次运行 | 在 EXE 同目录创建 `QuickPet-Portable-Cache` |
 | 数据位置 | 默认保存在本机，可备份和完整迁移 |
@@ -92,6 +92,7 @@
 - 配置损坏时尝试恢复最近有效备份。
 - 使用 `.quickpet` 文件迁移快捷项、分类、设置和自定义模型。
 - 清理便携缓存时显示阶段、文件、百分比和已释放空间。
+- 清理完成状态短暂停留后自动收起；维护检查最多同时处理 5 个快捷项。
 - 新版会隔离旧运行目录，并阻止同目录旧版继续读取新版数据。
 
 更完整的升级、权限与缓存排障步骤见 [使用说明](./使用说明.md)。
@@ -117,11 +118,11 @@ npm test
 npm run build
 ```
 
-构建产物位于 `dist/QuickPet-Portable-0.12.4-x64.exe`。项目不会生成 NSIS、IExpress 或其他安装包。
+构建产物位于 `dist/QuickPet-Portable-0.12.5-x64.exe`。项目不会生成 NSIS、IExpress 或其他安装包。
 
 ## 测试状态
 
-当前 121 项自动测试全部通过，覆盖无内置分类、多级分类、确认弹窗恢复、详细类型识别、手动排序、协议启动、搜索、启动台、组合键冲突回滚、桌宠投喂与拖动、透明区域点击、模型导入、备份恢复、便携缓存、发布构建兼容性和不同 DPI 双屏接缝等主要流程。
+当前 128 项自动测试全部通过，覆盖无内置分类、多级分类、自选文件夹与文件批量收纳、更新弹窗、缓存进度收起、维护并发、确认弹窗恢复、详细类型识别、手动排序、协议启动、搜索、启动台、组合键冲突回滚、桌宠投喂与拖动、透明区域点击、模型导入、备份恢复、发布构建兼容性和不同 DPI 双屏接缝等主要流程。
 
 性能记录：CPU `0.68%`、峰值内存 `332.6 MB`、3D 空闲帧率 `30.08 FPS`。
 

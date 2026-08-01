@@ -405,13 +405,6 @@ input[type="range"], input[type="checkbox"] { accent-color: var(--accent); }
 .hotkey-assignment { display: grid; grid-template-columns: minmax(150px, .9fr) minmax(190px, 1.1fr) auto; align-items: center; gap: 8px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
 .hotkey-assignment .select-control, .hotkey-assignment .text-control { min-width: 0; }
 
-.usage-stats-list { display: grid; gap: 9px; }
-.usage-row { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(100px, 1.2fr); align-items: center; gap: 12px; }
-.usage-row > span { display: flex; justify-content: space-between; min-width: 0; gap: 8px; }
-.usage-row b { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.usage-row small { flex: 0 0 auto; color: var(--text-soft); font-size: 8px; }
-.usage-row i { display: block; height: 5px; overflow: hidden; border-radius: 2px; background: var(--surface-3); }
-.usage-row em { display: block; height: 100%; border-radius: inherit; background: var(--action); }
 .portable-cleanup-switch { margin-bottom: 12px; border-top: 0; border-bottom: 1px solid var(--border); }
 .storage-report { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); }
 .storage-report > div { display: grid; gap: 4px; padding: 12px 14px; border-right: 1px solid var(--border); }
@@ -450,6 +443,9 @@ input[type="range"], input[type="checkbox"] { accent-color: var(--accent); }
 .target-picker button { white-space: nowrap; }
 .setting-row > label { display: grid; gap: 2px; }
 .setting-row > label small { color: var(--text-soft); font-size: 9px; font-weight: 450; }
+.range-row > label { display: flex; align-items: baseline; gap: 7px; white-space: nowrap; }
+.range-row > label b { color: var(--text-soft); font: 650 10px/1 "Cascadia Mono", "Consolas", monospace; }
+.maintenance-tool-actions button { flex: 1 1 0; }
 .confirm-backdrop { z-index: 140; }
 .confirm-modal-card { width: min(430px, 100%); display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 13px; overflow: visible; }
 .confirm-mark { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--text); border-radius: 50%; background: var(--surface-2); color: var(--danger); font: 750 17px/1 "Cascadia Mono", "Consolas", monospace; }
@@ -552,7 +548,6 @@ input[type="range"], input[type="checkbox"] { accent-color: var(--accent); }
 .animation-map .select-control,
 .hotkey-center-row small,
 .hotkey-center-row button,
-.usage-row small,
 .version-line { font-size: 11px; }
 
 .tag-chip,

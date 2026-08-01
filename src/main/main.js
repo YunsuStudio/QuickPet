@@ -13,7 +13,7 @@ const { loginLaunchTarget, programRemovalTarget } = require('./portable-runtime'
 const { removeBackground, removeBackgroundFromDataUrl } = require('./background-removal');
 const { PetMotionController } = require('./pet-motion');
 const { ModelLibrary } = require('./model-library');
-const { scanSources } = require('./shortcut-scanner');
+const { scanLocalFiles, scanLocalFolders, scanSources, uniqueCandidates } = require('./shortcut-scanner');
 const { FullscreenWatcher } = require('./fullscreen-detector');
 const { WatchedFolderManager } = require('./watched-folder-manager');
 const { ReminderScheduler } = require('./reminder-scheduler');
@@ -76,6 +76,8 @@ let startupRecovery;
 let maintenanceManager;
 let migrationManager;
 let updateManager;
+const SHORTCUT_CHECK_CONCURRENCY = 5;
+let shortcutCheckInFlight = null;
 let safeMode = false;
 let safeModeRestore = null;
 let clipboardTimer;
@@ -552,15 +554,22 @@ async function openShortcut(id) {
   return true;
 }
 
-async function checkAllShortcuts() {
+async function performShortcutCheck() {
   const items = [...store.data.shortcuts];
   const results = [];
-  for (let index = 0; index < items.length; index += 5) {
-    results.push(...await Promise.all(items.slice(index, index + 5).map(checkShortcut)));
+  for (let index = 0; index < items.length; index += SHORTCUT_CHECK_CONCURRENCY) {
+    results.push(...await Promise.all(items.slice(index, index + SHORTCUT_CHECK_CONCURRENCY).map(checkShortcut)));
   }
   store.save();
   broadcastState();
   return results;
+}
+
+function checkAllShortcuts() {
+  if (!shortcutCheckInFlight) {
+    shortcutCheckInFlight = performShortcutCheck().finally(() => { shortcutCheckInFlight = null; });
+  }
+  return shortcutCheckInFlight;
 }
 
 function pushNotification(input) {
@@ -1022,11 +1031,25 @@ function registerIpc() {
   ipcMain.handle('shortcut:open', (_event, id) => openShortcut(id));
   ipcMain.handle('shortcut:check-all', () => checkAllShortcuts());
   ipcMain.handle('shortcut:reset-usage', () => { const result = store.resetUsage(); broadcastState(); return result; });
-  ipcMain.handle('shortcut:scan', (_event, kind = 'all') => scanSources(kind, {
-    app,
-    readShortcutLink: (filePath) => shell.readShortcutLink(filePath),
-    existingTargets: store.data.shortcuts.map((item) => item.target)
-  }));
+  ipcMain.handle('shortcut:scan', async (_event, kind = 'all') => {
+    const readShortcutLink = (filePath) => shell.readShortcutLink(filePath);
+    const existingTargets = store.data.shortcuts.map((item) => item.target);
+    if (kind === 'folder') {
+      const result = await dialog.showOpenDialog(panelWindow, {
+        title: '选择要扫描的文件夹',
+        properties: ['openDirectory', 'multiSelections']
+      });
+      return result.canceled ? null : uniqueCandidates(scanLocalFolders(result.filePaths, readShortcutLink), existingTargets);
+    }
+    if (kind === 'files') {
+      const result = await dialog.showOpenDialog(panelWindow, {
+        title: '选择要批量收纳的文件',
+        properties: ['openFile', 'multiSelections']
+      });
+      return result.canceled ? null : uniqueCandidates(scanLocalFiles(result.filePaths, readShortcutLink), existingTargets);
+    }
+    return scanSources(kind, { app, readShortcutLink, existingTargets });
+  });
   ipcMain.handle('shortcut:import-scan', (_event, candidates) => {
     const added = [];
     const errors = [];
@@ -1642,6 +1665,11 @@ if (!gotLock) {
             const hotkeysScreenshot = await panelWindow.webContents.capturePage();
             const hotkeysScreenshotPath = path.join(process.cwd(), 'tests', 'settings-hotkeys.png');
             fs.writeFileSync(hotkeysScreenshotPath, hotkeysScreenshot.toPNG());
+            await panelWindow.webContents.executeJavaScript("document.getElementById('itemHotkeysCard').scrollIntoView({block:'start'})");
+            await new Promise((resolve) => setTimeout(resolve, 250));
+            const organizerScreenshot = await panelWindow.webContents.capturePage();
+            const organizerScreenshotPath = path.join(process.cwd(), 'tests', 'settings-organizer.png');
+            fs.writeFileSync(organizerScreenshotPath, organizerScreenshot.toPNG());
             await panelWindow.webContents.executeJavaScript("document.querySelector('.model-center-card').scrollIntoView({block:'start'})");
             await new Promise((resolve) => setTimeout(resolve, 250));
             const modelScreenshot = await panelWindow.webContents.capturePage();
@@ -1697,6 +1725,21 @@ if (!gotLock) {
               return interactive && addModalOpened;
             })()`);
 
+            updateManager.lastResult = {
+              status: 'available',
+              currentVersion: app.getVersion(),
+              version: '99.0.0',
+              notes: '更新提示自动弹出测试',
+              releaseUrl: 'https://github.com/YunsuStudio/QuickPet/releases/tag/v99.0.0',
+              downloadUrl: ''
+            };
+            broadcastState();
+            await new Promise((resolve) => setTimeout(resolve, 350));
+            const updatePromptOpened = await panelWindow.webContents.executeJavaScript(`(() => !document.getElementById('confirmModal').classList.contains('hidden') && document.getElementById('confirmTitle').textContent.includes('99.0.0') && document.querySelector('.app-shell').inert)()`);
+            await panelWindow.webContents.executeJavaScript("document.getElementById('confirmCancelButton').click()");
+            await new Promise((resolve) => setTimeout(resolve, 120));
+            const updatePromptRecovered = await panelWindow.webContents.executeJavaScript(`!document.querySelector('.app-shell').inert && document.getElementById('confirmModal').classList.contains('hidden')`);
+
             const conflictAccelerator = 'CommandOrControl+Alt+F12';
             globalShortcut.register(conflictAccelerator, () => {});
             const hotkeyConflict = await panelWindow.webContents.executeJavaScript(`(async () => {
@@ -1711,11 +1754,11 @@ if (!gotLock) {
             console.log(`ui-test panel-bounds=${JSON.stringify(panelWindow.getBounds())}`);
             console.log(`ui-test sidebar-layout=${JSON.stringify(sidebarLayout)}`);
             console.log(`ui-test search-state=${JSON.stringify(searchState)} launcher-state=${JSON.stringify(launcherState)}`);
-            console.log(`ui-test modal-recovery=${JSON.stringify({ categoryConfirmOpened, categoryConfirmRecovered, clearConfirmOpened, clearConfirmRecovered })} hotkey-conflict=${JSON.stringify(hotkeyConflict)}`);
-            console.log(`ui-test screenshots=${shortcutsScreenshotPath},${screenshotPath},${hotkeysScreenshotPath},${modelScreenshotPath},${automationScreenshotPath},${searchScreenshotPath},${launcherScreenshotPath}`);
+            console.log(`ui-test modal-recovery=${JSON.stringify({ categoryConfirmOpened, categoryConfirmRecovered, clearConfirmOpened, clearConfirmRecovered, updatePromptOpened, updatePromptRecovered })} hotkey-conflict=${JSON.stringify(hotkeyConflict)}`);
+            console.log(`ui-test screenshots=${shortcutsScreenshotPath},${screenshotPath},${hotkeysScreenshotPath},${organizerScreenshotPath},${modelScreenshotPath},${automationScreenshotPath},${searchScreenshotPath},${launcherScreenshotPath}`);
             const categoryIds = store.data.categories.filter((item) => !item.id.startsWith('custom-')).map((item) => item.id);
             const panelHotkeyReady = await panelWindow.webContents.executeJavaScript(`document.getElementById('panelShortcutStatus')?.textContent === '已生效'`);
-            const modalRecoveryPassed = categoryConfirmOpened && categoryConfirmRecovered && clearConfirmOpened && clearConfirmRecovered;
+            const modalRecoveryPassed = categoryConfirmOpened && categoryConfirmRecovered && clearConfirmOpened && clearConfirmRecovered && updatePromptOpened && updatePromptRecovered;
             const hotkeyConflictPassed = hotkeyConflict.before === hotkeyConflict.after && hotkeyConflict.message.includes('已被系统或其他程序占用');
             exitAutomatedTest(searchState.resultCount === 0 && launcherState.resultCount === 1 && panelHotkeyReady && modalRecoveryPassed && hotkeyConflictPassed && categoryIds.length === 0 ? 0 : 6);
           } catch (error) {
@@ -1743,6 +1786,8 @@ if (!gotLock) {
                   await new Promise((resolve) => setTimeout(resolve, 25));
                 }
               };
+              await waitFor(() => !document.getElementById('confirmModal').classList.contains('hidden'));
+              document.getElementById('confirmButton').click();
               const progress = document.getElementById('cacheCleanupProgress');
               await waitFor(() => progress.dataset.stage === 'portable-item-start');
               progress.scrollIntoView({ block: 'center' });
@@ -1767,16 +1812,24 @@ if (!gotLock) {
                 if (Date.now() - started > 8000) throw new Error('timed out waiting for cache cleanup completion');
                 await new Promise((resolve) => setTimeout(resolve, 25));
               }
-              return {
+              const completion = {
                 stage: progress.dataset.stage,
                 percent: document.getElementById('cacheCleanupPercent').textContent,
-                status: document.getElementById('cacheCleanupStatus').textContent,
+                status: document.getElementById('cacheCleanupStatus').textContent
+              };
+              while (!progress.classList.contains('hidden')) {
+                if (Date.now() - started > 8000) throw new Error('timed out waiting for cache progress dismissal');
+                await new Promise((resolve) => setTimeout(resolve, 25));
+              }
+              return {
+                completion,
+                hiddenAfterCompletion: progress.classList.contains('hidden'),
                 refreshDisabled: document.getElementById('refreshStorageButton').disabled,
                 stages: window.__cacheProgressStages
               };
             })()`);
             const runningPassed = running.visible && running.stage === 'portable-item-start' && running.clearDisabled && running.refreshDisabled;
-            const completedPassed = completed.stage === 'complete' && completed.percent === '100%' && !completed.refreshDisabled && completed.stages.includes('runtime-start') && completed.stages.includes('complete');
+            const completedPassed = completed.completion.stage === 'complete' && completed.completion.percent === '100%' && completed.hiddenAfterCompletion && !completed.refreshDisabled && completed.stages.includes('runtime-start') && completed.stages.includes('complete');
             console.log(`cache-progress-ui-test running=${JSON.stringify(running)} completed=${JSON.stringify(completed)} screenshot=${screenshotPath}`);
             exitAutomatedTest(runningPassed && completedPassed ? 0 : 15);
           } catch (error) {

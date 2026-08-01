@@ -55,6 +55,9 @@ let backups = [];
 let storageReport = null;
 let cacheCleanupRunning = false;
 let cacheCleanupProgress = null;
+let cacheCleanupDismissTimer = null;
+let updatePromptTimer = null;
+let promptedUpdateVersion = '';
 let calendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let reminderFilter = 'all';
 
@@ -492,13 +495,6 @@ function renderHotkeyCenter() {
   }).join('') : '<p class="empty-inline">尚未给任何快捷项目设置组合键。</p>';
 }
 
-function renderUsageStats() {
-  const list = $('#usageStatsList');
-  const items = [...state.shortcuts].filter((item) => item.useCount > 0).sort((a, b) => b.useCount - a.useCount || b.lastUsedAt - a.lastUsedAt).slice(0, 6);
-  const max = Math.max(1, ...items.map((item) => item.useCount));
-  list.innerHTML = items.length ? items.map((item) => `<div class="usage-row"><span><b>${escapeHtml(item.name)}</b><small>${item.useCount} 次</small></span><i><em style="width:${Math.max(6, item.useCount / max * 100)}%"></em></i></div>`).join('') : '<p class="empty-inline">打开快捷项目后会在这里生成本地统计。</p>';
-}
-
 function cacheCleanupPresentation(progress = {}) {
   const index = Math.max(0, Number(progress.index) || 0);
   const total = Math.max(0, Number(progress.total) || 0);
@@ -548,9 +544,28 @@ function updateMaintenanceButtons() {
       : '没有可清理缓存';
 }
 
+function scheduleCacheCleanupProgressDismiss(delay = 1400) {
+  clearTimeout(cacheCleanupDismissTimer);
+  cacheCleanupDismissTimer = setTimeout(() => {
+    if (cacheCleanupRunning) return scheduleCacheCleanupProgressDismiss(300);
+    cacheCleanupProgress = null;
+    const container = $('#cacheCleanupProgress');
+    container?.classList.add('hidden');
+    if (container) {
+      delete container.dataset.stage;
+      delete container.dataset.result;
+    }
+    updateMaintenanceButtons();
+  }, delay);
+}
+
 function renderCacheCleanupProgress() {
   const container = $('#cacheCleanupProgress');
-  if (!container || !cacheCleanupProgress) return;
+  if (!container) return;
+  if (!cacheCleanupProgress) {
+    container.classList.add('hidden');
+    return;
+  }
   const presentation = cacheCleanupPresentation(cacheCleanupProgress);
   container.classList.remove('hidden');
   container.dataset.stage = cacheCleanupProgress.stage || 'scan';
@@ -565,6 +580,7 @@ function renderCacheCleanupProgress() {
   $('#cacheCleanupCurrent').textContent = presentation.detail;
   $('#cacheCleanupReleased').textContent = `已释放 ${formatBytes(cacheCleanupProgress.releasedBytes)}`;
   updateMaintenanceButtons();
+  if (cacheCleanupProgress.stage === 'complete') scheduleCacheCleanupProgressDismiss();
 }
 
 function renderStorageReport() {
@@ -602,12 +618,48 @@ function renderUpdateStatus() {
   $('#downloadUpdateButton').textContent = update.downloadUrl ? '下载新版本' : '查看发布页';
 }
 
+async function downloadAvailableUpdateWithFeedback() {
+  try {
+    const result = await window.quickPet.downloadUpdate();
+    if (result) showToast(/^https:\/\//i.test(result) ? '已打开 GitHub 发布页' : '更新包已下载并通过校验');
+  } catch (error) {
+    showToast(cleanError(error), 'error');
+  }
+}
+
+async function promptAvailableUpdate(update, { preview = false } = {}) {
+  if (!preview) {
+    if (!update?.version || promptedUpdateVersion === update.version) return;
+    promptedUpdateVersion = update.version;
+  }
+  const notes = String(update?.notes || '').split(/\r?\n/).find((line) => line.trim() && !line.trim().startsWith('#'))?.trim().slice(0, 180);
+  const accepted = await confirmAction({
+    title: preview ? '更新提示预览' : `发现快捷宠 ${update.version}`,
+    message: preview
+      ? '启动检查发现新版本时，会显示这个应用内提示。'
+      : `${notes || '新版本已经发布。'}\n当前版本：${state.appVersion}`,
+    confirmLabel: preview ? '关闭预览' : update.downloadUrl ? '下载新版本' : '查看发布页',
+    danger: false
+  });
+  if (accepted && !preview) await downloadAvailableUpdateWithFeedback();
+}
+
+function maybePromptAvailableUpdate(nextState = state) {
+  const update = nextState.runtime?.update;
+  if (update?.status !== 'available' || !update.version || promptedUpdateVersion === update.version) return;
+  clearTimeout(updatePromptTimer);
+  updatePromptTimer = setTimeout(() => {
+    if (confirmResolver) return maybePromptAvailableUpdate(nextState);
+    promptAvailableUpdate(update).catch((error) => showToast(cleanError(error), 'error'));
+  }, 180);
+}
+
 function organizeSettingsLayout() {
   const grid = document.querySelector('#settingsView .settings-grid');
   const groups = [
     ['常用入口', '搜索、面板与界面', ['globalHotkeysCard', 'appearanceCard']],
     ['桌宠与动作', '形象、行为与活动范围', ['petProfileCard', 'petBehaviorCard', 'petRangeCard', 'modelCenterCard']],
-    ['整理与效率', '分类、批量收纳与项目快捷键', ['categorySettingsCard', 'batchImportCard', 'itemHotkeysCard', 'usageStatsCard']],
+    ['整理与效率', '分类、项目快捷键与批量收纳', ['categorySettingsCard', 'itemHotkeysCard', 'batchImportCard']],
     ['数据与程序', '备份、迁移、维护与版本信息', ['startupDataCard', 'migrationCard', 'maintenanceToolsCard', 'aboutUpdateCard', 'storageCleanupCard']]
   ];
   grid.querySelectorAll('.settings-section-divider').forEach((element) => element.remove());
@@ -696,7 +748,6 @@ function renderSettings() {
   renderCategoryManager();
   renderBackups();
   renderHotkeyCenter();
-  renderUsageStats();
   renderStorageReport();
   renderUpdateStatus();
 }
@@ -932,8 +983,10 @@ function renderScanPreview() {
 
 async function scanAndPreview(kind) {
   try {
-    showToast('正在扫描本机快捷方式，请稍候…');
-    scannedCandidates = (await window.quickPet.scanShortcuts(kind)).map((item) => ({ ...item, selected: true }));
+    showToast('正在扫描所选内容，请稍候…');
+    const candidates = await window.quickPet.scanShortcuts(kind);
+    if (!candidates) return;
+    scannedCandidates = candidates.map((item) => ({ ...item, selected: true }));
     renderScanPreview();
     $('#scanModal').classList.remove('hidden');
   } catch (error) {
@@ -1389,9 +1442,9 @@ function bindSettings() {
     } catch (error) { showToast(cleanError(error), 'error'); }
   });
   $('#resetUsageButton').addEventListener('click', async () => {
-    if (!await confirmAction({ title: '清零使用统计', message: '所有本地打开次数和最近使用时间将被清空。', confirmLabel: '清零' })) return;
+    if (!await confirmAction({ title: '清除最近使用', message: '本机记录的打开次数和最近使用时间将被清除。', confirmLabel: '清除' })) return;
     await window.quickPet.resetUsage();
-    showToast('本地使用统计已清零');
+    showToast('最近使用记录已清除');
   });
   $('#exportMigrationButton').addEventListener('click', async () => {
     try { const file = await window.quickPet.exportMigration(); if (file) showToast('完整迁移包已导出'); } catch (error) { showToast(cleanError(error), 'error'); }
@@ -1407,6 +1460,7 @@ function bindSettings() {
     const bytes = storageReport?.cleanableCacheBytes || 0;
     if (!bytes) return showToast('当前没有可清理缓存');
     if (!await confirmAction({ title: '清理便携缓存', message: `预计释放 ${formatBytes(bytes)}。\n当前版本、个人设置、快捷方式和模型都会保留。`, confirmLabel: '开始清理', danger: false })) return;
+    clearTimeout(cacheCleanupDismissTimer);
     cacheCleanupRunning = true;
     cacheCleanupProgress = { stage: 'scan', releasedBytes: 0 };
     renderCacheCleanupProgress();
@@ -1442,7 +1496,11 @@ function bindSettings() {
     if (!await confirmAction({ title: '移除快捷宠', message: `${action}${removeData ? '，同时永久删除个人数据、模型和备份' : '，保留个人数据'}。`, confirmLabel: '确认移除' })) return;
     try { await window.quickPet.removeProgram(removeData); } catch (error) { showToast(cleanError(error), 'error'); }
   });
-  $('#autoCheckUpdatesInput').addEventListener('change', () => window.quickPet.updateSettings({ autoCheckUpdates: $('#autoCheckUpdatesInput').checked }));
+  $('#autoCheckUpdatesInput').addEventListener('change', async () => {
+    const enabled = $('#autoCheckUpdatesInput').checked;
+    await window.quickPet.updateSettings({ autoCheckUpdates: enabled });
+    showToast(enabled ? '启动更新检查已开启' : '启动更新检查已关闭');
+  });
   $('#portableCacheCleanupPromptInput').addEventListener('change', async () => {
     const enabled = $('#portableCacheCleanupPromptInput').checked;
     await window.quickPet.updateSettings({ portableCacheCleanupPrompt: enabled });
@@ -1456,12 +1514,8 @@ function bindSettings() {
     } catch (error) { showToast(cleanError(error), 'error'); }
     finally { $('#checkUpdateButton').disabled = false; }
   });
-  $('#downloadUpdateButton').addEventListener('click', async () => {
-    try {
-      const result = await window.quickPet.downloadUpdate();
-      if (result) showToast(/^https:\/\//i.test(result) ? '已打开 GitHub 发布页' : '更新包已下载并通过校验');
-    } catch (error) { showToast(cleanError(error), 'error'); }
-  });
+  $('#previewUpdateButton').addEventListener('click', () => promptAvailableUpdate({ version: '下一版本' }, { preview: true }));
+  $('#downloadUpdateButton').addEventListener('click', downloadAvailableUpdateWithFeedback);
   $('#openProjectButton').addEventListener('click', () => window.quickPet.openProjectPage());
 
   $('#addCategoryForm').addEventListener('submit', async (event) => {
@@ -1587,7 +1641,11 @@ async function initialize() {
     bindSettings();
     bindAutomation();
     bindWindowControls();
-    window.quickPet.onStateChanged((nextState) => { state = nextState; renderAll(); });
+    window.quickPet.onStateChanged((nextState) => {
+      state = nextState;
+      renderAll();
+      maybePromptAvailableUpdate(nextState);
+    });
     window.quickPet.onCacheCleanupProgress((progress) => {
       cacheCleanupProgress = progress;
       renderCacheCleanupProgress();
@@ -1595,6 +1653,7 @@ async function initialize() {
     window.quickPet.onNavigateSettings(() => navigate('settings'));
     window.quickPet.onNavigateAutomation(() => navigate('automation'));
     window.quickPet.rendererReady();
+    maybePromptAvailableUpdate(state);
   } catch (error) {
     showToast('启动失败：' + cleanError(error), 'error');
   }

@@ -61,29 +61,50 @@ function walkFiles(root, depth = 0, maximumDepth = 5, output = []) {
   return output;
 }
 
+function candidateFromFile(filePath, source, readShortcutLink, includeRegularFiles = true) {
+  if (!filePath || !fs.existsSync(filePath)) return null;
+  let stats;
+  try { stats = fs.statSync(filePath); } catch { return null; }
+  if (!stats.isFile()) return null;
+  const extension = path.extname(filePath).toLowerCase();
+  let target = '';
+  if (extension === '.lnk') {
+    try { target = readShortcutLink(filePath)?.target ? filePath : ''; } catch {}
+  } else if (extension === '.url') {
+    target = parseInternetShortcut(filePath);
+  } else if (includeRegularFiles && !/^(desktop\.ini|thumbs\.db)$/i.test(path.basename(filePath))) {
+    target = filePath;
+  }
+  return target ? {
+    name: path.basename(filePath, extension),
+    target,
+    type: inferType(target),
+    source
+  } : null;
+}
+
 function scanWindowsShortcuts({ source, roots, readShortcutLink, includeRegularFiles = false }) {
   const output = [];
   for (const root of roots) {
     for (const filePath of walkFiles(root)) {
-      const extension = path.extname(filePath).toLowerCase();
-      let target = '';
-      if (extension === '.lnk') {
-        try { target = readShortcutLink(filePath)?.target ? filePath : ''; } catch {}
-      } else if (extension === '.url') {
-        target = parseInternetShortcut(filePath);
-      } else if (includeRegularFiles && !/^\.(ini|db|log)$/i.test(extension)) {
-        target = filePath;
-      }
-      if (!target) continue;
-      output.push({
-        name: path.basename(filePath, extension),
-        target,
-        type: inferType(target),
-        source
-      });
+      const candidate = candidateFromFile(filePath, source, readShortcutLink, includeRegularFiles);
+      if (candidate) output.push(candidate);
     }
   }
   return output;
+}
+
+function scanLocalFolders(roots, readShortcutLink) {
+  return roots.flatMap((root) => scanWindowsShortcuts({
+    source: `文件夹 · ${path.basename(root) || root}`,
+    roots: [root],
+    readShortcutLink,
+    includeRegularFiles: true
+  }));
+}
+
+function scanLocalFiles(filePaths, readShortcutLink) {
+  return filePaths.map((filePath) => candidateFromFile(filePath, '本地文件', readShortcutLink, true)).filter(Boolean);
 }
 
 function scanDesktop(roots, readShortcutLink) {
@@ -137,9 +158,12 @@ function scanSources(kind, { app, readShortcutLink, existingTargets = [] }) {
 }
 
 module.exports = {
+  candidateFromFile,
   collectBookmarks,
   scanBookmarks,
   scanDesktop,
+  scanLocalFiles,
+  scanLocalFolders,
   scanSources,
   scanWindowsShortcuts,
   uniqueCandidates

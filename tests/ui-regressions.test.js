@@ -115,3 +115,47 @@ test('正常启动会同时创建并显示桌宠与主面板', () => {
   const main = read('src/main/main.js');
   assert.match(main, /createPetWindow\(\);\s*\n\s*createPanelWindow\(!isAutomatedTest\)/);
 });
+
+test('批量收纳支持自选文件夹和文件并排在快捷键台后面', () => {
+  const html = read('src/renderer/index.html');
+  const app = read('src/renderer/app.js');
+  assert.match(html, /data-scan="folder"/);
+  assert.match(html, /data-scan="files"/);
+  assert.match(app, /'itemHotkeysCard', 'batchImportCard'/);
+});
+
+test('使用记录不再独占设置卡且仍可清除', () => {
+  const html = read('src/renderer/index.html');
+  const app = read('src/renderer/app.js');
+  assert.doesNotMatch(html, /id="usageStatsCard"/);
+  assert.match(html, /id="resetUsageButton"/);
+  assert.doesNotMatch(app, /renderUsageStats/);
+});
+
+test('更新检查提供应用内提示和可测试的提示预览', () => {
+  const html = read('src/renderer/index.html');
+  const app = read('src/renderer/app.js');
+  assert.match(html, /id="previewUpdateButton"/);
+  assert.match(app, /promptAvailableUpdate/);
+  assert.match(app, /maybePromptAvailableUpdate/);
+});
+
+test('缓存清理完成后自动收起进度条', () => {
+  const app = read('src/renderer/app.js');
+  assert.match(app, /scheduleCacheCleanupProgressDismiss/);
+  assert.match(app, /cacheCleanupProgress = null/);
+});
+
+test('维护工具限制检查并发并合并重复缓存请求', () => {
+  const main = read('src/main/main.js');
+  const maintenance = read('src/main/maintenance-manager.js');
+  assert.match(main, /SHORTCUT_CHECK_CONCURRENCY = 5/);
+  assert.match(main, /shortcutCheckInFlight/);
+  assert.match(main, /cacheCleanupInFlight/);
+  assert.match(maintenance, /Promise\.all\(\[/);
+});
+
+test('范围设置的名称和值保持单行', () => {
+  const theme = read('src/renderer/index-theme.css');
+  assert.match(theme, /\.range-row\s*>\s*label\s*\{[^}]*display:\s*flex/s);
+});
