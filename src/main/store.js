@@ -5,6 +5,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { normalizeHotkey } = require('./shortcut-hotkeys');
 const { rateModelPerformance } = require('../shared/model-performance');
+const { normalizeCategoryKeywords, suggestCategory: suggestAutomaticCategory } = require('../shared/auto-category');
 const {
   DEFAULT_CATEGORY_ID,
   DEFAULT_CATEGORIES,
@@ -154,6 +155,7 @@ class Store {
         name: String(item.name).slice(0, 16),
         icon: String(item.icon || '✨').slice(0, 4),
         color: /^#[0-9a-f]{6}$/i.test(item.color || '') ? item.color : '#9aa0b5',
+        keywords: normalizeCategoryKeywords(item.keywords),
         parentId: String(item.parentId || ''),
         sortOrder: Number.isFinite(Number(item.sortOrder)) ? Number(item.sortOrder) : index
       }))
@@ -406,7 +408,9 @@ class Store {
     const type = inferType(target, input.type);
     const availableCategories = new Set(this.data.categories.map((item) => item.id));
     const baseItem = { name: input.name || displayNameFromTarget(target), target, type };
-    const matchedRule = this.data.rules.find((rule) => ruleMatches(rule, baseItem));
+    const manualUncategorized = input.categoryMode === 'manual' && input.category === '';
+    const matchedRule = manualUncategorized ? null : this.data.rules.find((rule) => ruleMatches(rule, baseItem));
+    const automaticMatch = manualUncategorized || matchedRule ? null : suggestAutomaticCategory({ ...baseItem, classificationHints: input.classificationHints }, this.data.categories);
     const hotkey = normalizeHotkey(input.hotkey);
     if (input.hotkey && !hotkey) throw new Error('组合键需要包含 Ctrl、Alt、Shift 或 Win，并搭配一个按键');
     if ([this.data.settings.globalSearchShortcut, this.data.settings.quickLaunchShortcut, this.data.settings.panelShortcut].map(normalizeHotkey).includes(hotkey) || this.data.shortcuts.some((entry) => normalizeHotkey(entry.hotkey) === hotkey && hotkey)) throw new Error('这个组合键已经被占用');
@@ -415,7 +419,7 @@ class Store {
       name: String(input.name || displayNameFromTarget(target)).trim().slice(0, 100),
       target,
       type,
-      category: availableCategories.has(input.category) ? input.category : matchedRule?.category || DEFAULT_CATEGORY_ID,
+      category: manualUncategorized ? DEFAULT_CATEGORY_ID : availableCategories.has(input.category) ? input.category : matchedRule?.category || automaticMatch?.category || DEFAULT_CATEGORY_ID,
       tags: [...new Set([
         ...(Array.isArray(input.tags) ? input.tags : []),
         ...(matchedRule?.tags || [])
@@ -432,7 +436,7 @@ class Store {
       iconPath: cleanAssetReference(input.iconPath),
       iconBackground: /^#[0-9a-f]{6}$/i.test(input.iconBackground || '') ? input.iconBackground : '',
       hotkey,
-      sortOrder: Math.max(-1, ...this.data.shortcuts.filter((entry) => entry.category === (availableCategories.has(input.category) ? input.category : matchedRule?.category || DEFAULT_CATEGORY_ID)).map((entry) => Number(entry.sortOrder) || 0)) + 1
+      sortOrder: Math.max(-1, ...this.data.shortcuts.filter((entry) => entry.category === (manualUncategorized ? DEFAULT_CATEGORY_ID : availableCategories.has(input.category) ? input.category : matchedRule?.category || automaticMatch?.category || DEFAULT_CATEGORY_ID)).map((entry) => Number(entry.sortOrder) || 0)) + 1
     };
     if (this.assetStore && item.iconData) {
       item.iconPath = this.assetStore.saveDataUrl(item.iconData, 'shortcuts', item.id);
@@ -682,6 +686,15 @@ class Store {
     return rule;
   }
 
+  suggestCategory(input = {}) {
+    const target = normalizeTarget(input.target);
+    const type = inferType(target, input.type);
+    const baseItem = { name: input.name || displayNameFromTarget(target), target, type };
+    const matchedRule = this.data.rules.find((rule) => ruleMatches(rule, baseItem));
+    if (matchedRule) return { category: matchedRule.category, source: 'rule', confidence: 'high', reason: matchedRule.name };
+    return suggestAutomaticCategory({ ...baseItem, classificationHints: input.classificationHints }, this.data.categories);
+  }
+
   updateRule(id, changes) {
     const current = this.data.rules.find((item) => item.id === id);
     if (!current) throw new Error('没有找到这条规则');
@@ -809,6 +822,7 @@ class Store {
       name,
       icon: String(input.icon || '✨').slice(0, 4),
       color: /^#[0-9a-f]{6}$/i.test(input.color || '') ? input.color : '#4a4a46',
+      keywords: normalizeCategoryKeywords(input.keywords),
       parentId: this.data.categories.some((item) => item.id === input.parentId) ? input.parentId : '',
       sortOrder: Math.max(-1, ...this.data.categories.map((item) => Number(item.sortOrder) || 0)) + 1
     };
@@ -823,6 +837,7 @@ class Store {
     if (changes.name) item.name = String(changes.name).trim().slice(0, 16);
     if (changes.icon) item.icon = String(changes.icon).slice(0, 4);
     if (/^#[0-9a-f]{6}$/i.test(changes.color || '')) item.color = changes.color;
+    if (Array.isArray(changes.keywords) || typeof changes.keywords === 'string') item.keywords = normalizeCategoryKeywords(changes.keywords);
     if (typeof changes.parentId === 'string') {
       const parentId = changes.parentId;
       if (!parentId) item.parentId = '';

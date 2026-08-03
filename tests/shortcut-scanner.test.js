@@ -36,6 +36,7 @@ test('扫描 Windows 快捷方式时保留 lnk 文件以免丢失参数', () => 
     assert.equal(result.length, 1);
     assert.equal(result[0].target, link);
     assert.equal(result[0].type, 'app');
+    assert.deepEqual(result[0].classificationHints, ['C:\\Steam\\steam.exe', '-applaunch 730']);
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }

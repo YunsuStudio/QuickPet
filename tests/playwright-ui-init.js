@@ -2,7 +2,7 @@ async (page) => {
   await page.addInitScript(() => {
     const categories = [];
     const state = {
-      appVersion: '0.12.5',
+      appVersion: '0.12.6',
       categories,
       shortcuts: [],
       models: [],
@@ -15,7 +15,7 @@ async (page) => {
       hotkeyRegistrations: {},
       runtime: {
         globalShortcutRegistrations: { search: true, launcher: true },
-        update: { status: 'idle', currentVersion: '0.12.5' }
+        update: { status: 'idle', currentVersion: '0.12.6' }
       },
       petStatus: { name: '快捷宠', mood: 82, hunger: 76, affection: 20 },
       settings: {

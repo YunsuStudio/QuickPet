@@ -190,11 +190,12 @@
             </article>
 
             <article id="categorySettingsCard" class="settings-card settings-card-wide">
-              <div class="settings-card-heading"><span class="settings-icon">▦</span><div><h2>分类管理</h2><p>修改名称、图标、颜色和显示顺序</p></div></div>
+              <div class="settings-card-heading"><span class="settings-icon">▦</span><div><h2>分类管理</h2><p>分类名称会参与自动识别，也可以补充专属关键词</p></div></div>
               <div id="categoryManager" class="category-manager"></div>
               <form id="addCategoryForm" class="add-category-form">
                 <input id="newCategoryIcon" class="tiny-input" maxlength="4" value="✨" aria-label="分类图标">
                 <input id="newCategoryName" class="text-control" maxlength="16" placeholder="新分类名称" required>
+                <input id="newCategoryKeywords" class="text-control" maxlength="240" placeholder="识别关键词，如 微信, QQ">
                 <select id="newCategoryParent" class="select-control" aria-label="上级分类"><option value="">顶级分类</option></select>
                 <input id="newCategoryColor" type="color" value="#4a4a46" aria-label="分类颜色">
                 <button class="secondary-button" type="submit">添加分类</button>
@@ -324,7 +325,7 @@
   <div id="scanModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="scanModalTitle">
     <div class="modal-card scan-modal-card">
       <div class="modal-heading"><div><p class="eyebrow">批量收纳</p><h2 id="scanModalTitle">选择要导入的项目</h2></div><button id="scanModalCloseButton" type="button" class="icon-button">×</button></div>
-      <div class="scan-toolbar"><label><input id="scanSelectAllInput" type="checkbox" checked> 全选</label><span id="scanSelectionSummary">0 个项目</span></div>
+      <div class="scan-toolbar"><label><input id="scanSelectAllInput" type="checkbox" checked> 全选</label><span id="scanSelectionSummary">0 个项目</span><small>导入前可调整分类</small></div>
       <div id="scanPreviewList" class="scan-preview-list"></div>
       <div class="modal-actions"><button id="scanCancelButton" class="ghost-button" type="button">取消</button><button id="scanImportButton" class="primary-button" type="button">导入所选项目</button></div>
     </div>

@@ -396,10 +396,10 @@ function renderLibrary() {
 function renderCategoryOptions() {
   const selected = elements.categoryInput.value;
   const categories = flattenedCategories();
-  elements.categoryInput.innerHTML = '<option value="">未分类</option>' + categories.map((category) =>
+  elements.categoryInput.innerHTML = '<option value="">自动分类</option><option value="__uncategorized__">未分类</option>' + categories.map((category) =>
     `<option value="${escapeHtml(category.id)}">${'　'.repeat(category.depth)}${escapeHtml(category.icon)} ${escapeHtml(category.name)}</option>`
   ).join('');
-  elements.categoryInput.value = state.categories.some((category) => category.id === selected) ? selected : '';
+  elements.categoryInput.value = selected === '__uncategorized__' || state.categories.some((category) => category.id === selected) ? selected : '';
   const newParent = $('#newCategoryParent');
   const selectedParent = newParent.value;
   newParent.innerHTML = '<option value="">顶级分类</option>' + categories.map((category) =>
@@ -418,6 +418,7 @@ function renderCategoryManager() {
     <div class="category-edit-row" data-id="${escapeHtml(category.id)}" style="--category-depth:${category.depth}">
       <input class="tiny-input category-icon-input" maxlength="4" value="${escapeHtml(category.icon)}" aria-label="图标">
       <input class="text-control category-name-input" maxlength="16" value="${escapeHtml(category.name)}" aria-label="名称">
+      <input class="text-control category-keywords-input" maxlength="240" value="${escapeHtml((category.keywords || []).join(', '))}" placeholder="识别关键词" aria-label="自动识别关键词">
       <select class="select-control category-parent-input" aria-label="上级分类"><option value="">顶级分类</option>${parentOptions}</select>
       <input class="category-color-input" type="color" value="${escapeHtml(category.color)}" aria-label="颜色">
       <div class="row-buttons">
@@ -923,7 +924,8 @@ async function submitShortcut(event) {
     name: elements.nameInput.value.trim(),
     target: elements.targetInput.value.trim(),
     type: elements.typeInput.value,
-    category: elements.categoryInput.value,
+    category: elements.categoryInput.value === '__uncategorized__' ? '' : elements.categoryInput.value,
+    categoryMode: elements.categoryInput.value ? 'manual' : 'auto',
     hotkey: elements.hotkeyInput.value,
     tags: elements.tagsInput.value.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean),
     favorite: elements.favoriteInput.checked,
@@ -935,7 +937,8 @@ async function submitShortcut(event) {
       showToast('快捷方式已更新');
     } else {
       await window.quickPet.addShortcut(input);
-      showToast('已收纳并自动分类');
+      const selectedCategory = state.categories.find((category) => category.id === input.category);
+      showToast(input.categoryMode === 'auto' ? '已收纳并自动分类' : selectedCategory ? `已收纳到“${selectedCategory.name}”` : '已收纳为未分类');
     }
     closeModal();
   } catch (error) {
@@ -966,14 +969,19 @@ async function checkAll() {
 
 function renderScanPreview() {
   const list = $('#scanPreviewList');
-  list.innerHTML = scannedCandidates.length ? scannedCandidates.map((item, index) => `
-    <label class="scan-preview-row">
+  const categories = flattenedCategories();
+  list.innerHTML = scannedCandidates.length ? scannedCandidates.map((item, index) => {
+    const categoryOptions = '<option value="">未分类</option>' + categories.map((category) => `<option value="${escapeHtml(category.id)}" ${item.category === category.id ? 'selected' : ''}>${'　'.repeat(category.depth)}${escapeHtml(category.name)}</option>`).join('');
+    const matchState = item.categoryEdited ? '已调整' : item.categoryMatch ? '自动匹配' : '待分类';
+    return `
+    <div class="scan-preview-row">
       <input type="checkbox" data-scan-index="${index}" ${item.selected !== false ? 'checked' : ''}>
       <span class="scan-kind">${typeIcon(item.type)}</span>
       <span><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.target)}</small></span>
-      <em>${escapeHtml(item.source)}</em>
-    </label>
-  `).join('') : '<div class="empty-scan">没有发现尚未收纳的新项目。</div>';
+      <span class="scan-decision"><small>${escapeHtml(item.source)} · ${matchState}</small><select class="select-control scan-category-select" data-scan-category-index="${index}" aria-label="${escapeHtml(item.name)} 的分类">${categoryOptions}</select></span>
+    </div>
+  `;
+  }).join('') : '<div class="empty-scan">没有发现尚未收纳的新项目。</div>';
   const selected = scannedCandidates.filter((item) => item.selected !== false).length;
   $('#scanSelectionSummary').textContent = `已选择 ${selected} / ${scannedCandidates.length} 个`;
   $('#scanSelectAllInput').checked = Boolean(scannedCandidates.length) && selected === scannedCandidates.length;
@@ -1197,6 +1205,13 @@ function bindModal() {
     renderScanPreview();
   });
   $('#scanPreviewList').addEventListener('change', (event) => {
+    const categoryIndex = Number(event.target.dataset.scanCategoryIndex);
+    if (Number.isInteger(categoryIndex) && scannedCandidates[categoryIndex]) {
+      scannedCandidates[categoryIndex].category = event.target.value;
+      scannedCandidates[categoryIndex].categoryEdited = true;
+      renderScanPreview();
+      return;
+    }
     const index = Number(event.target.dataset.scanIndex);
     if (Number.isInteger(index) && scannedCandidates[index]) scannedCandidates[index].selected = event.target.checked;
     renderScanPreview();
@@ -1521,8 +1536,9 @@ function bindSettings() {
   $('#addCategoryForm').addEventListener('submit', async (event) => {
     event.preventDefault();
     try {
-      await window.quickPet.addCategory({ name: $('#newCategoryName').value, icon: $('#newCategoryIcon').value, color: $('#newCategoryColor').value, parentId: $('#newCategoryParent').value });
+      await window.quickPet.addCategory({ name: $('#newCategoryName').value, icon: $('#newCategoryIcon').value, keywords: $('#newCategoryKeywords').value, color: $('#newCategoryColor').value, parentId: $('#newCategoryParent').value });
       $('#newCategoryName').value = '';
+      $('#newCategoryKeywords').value = '';
       showToast('新分类已添加');
     } catch (error) { showToast(cleanError(error), 'error'); }
   });
@@ -1546,6 +1562,7 @@ function bindSettings() {
       await window.quickPet.updateCategory(row.dataset.id, {
         icon: row.querySelector('.category-icon-input').value,
         name: row.querySelector('.category-name-input').value,
+        keywords: row.querySelector('.category-keywords-input').value,
         color: row.querySelector('.category-color-input').value,
         parentId: row.querySelector('.category-parent-input').value
       });

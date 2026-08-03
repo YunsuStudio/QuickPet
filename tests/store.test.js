@@ -33,6 +33,23 @@ test('智能规则会覆盖自动分类并追加标签', () => withStore((store)
   assert.deepEqual(item.tags, ['设计素材']);
 }));
 
+test('分类名称和关键词会用于自动分类且手动规则优先', () => withStore((store) => {
+  const development = store.addCategory({ name: '开发' });
+  const ai = store.addCategory({ name: 'AI工具' });
+  const communication = store.addCategory({ name: '联系', keywords: ['飞书', 'Lark'] });
+  const cursor = store.addShortcut({ name: 'Cursor AI Editor', target: 'C:\\Apps\\Cursor\\Cursor.exe' });
+  const lark = store.addShortcut({ name: 'Lark', target: 'C:\\Apps\\Lark\\Lark.exe' });
+  assert.equal(cursor.category, ai.id);
+  assert.equal(lark.category, communication.id);
+
+  store.addRule({ name: 'Cursor 归入开发', field: 'name', operator: 'contains', value: 'cursor', category: development.id });
+  const cursorBeta = store.addShortcut({ name: 'Cursor Beta', target: 'C:\\Apps\\Cursor Beta\\Cursor.exe' });
+  assert.equal(cursorBeta.category, development.id);
+  const cursorManual = store.addShortcut({ name: 'Cursor Preview', target: 'C:\\Apps\\Cursor Preview\\Cursor.exe', category: '', categoryMode: 'manual' });
+  assert.equal(cursorManual.category, '');
+  assert.deepEqual(store.data.categories.find((item) => item.id === communication.id).keywords, ['飞书', 'Lark']);
+}));
+
 test('图标字段、提醒和通知会安全持久化', () => withStore((store) => {
   const item = store.addShortcut({ target: 'https://example.com/icon', iconData: 'data:image/png;base64,AA==', iconBackground: '#663399' });
   store.addReminder({ title: '休息一下', dueAt: Date.now() + 1000, repeat: 'daily' });

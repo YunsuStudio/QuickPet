@@ -159,3 +159,12 @@ test('范围设置的名称和值保持单行', () => {
   const theme = read('src/renderer/index-theme.css');
   assert.match(theme, /\.range-row\s*>\s*label\s*\{[^}]*display:\s*flex/s);
 });
+
+test('分类支持识别关键词且扫描预览允许修正自动分类', () => {
+  const html = read('src/renderer/index.html');
+  const app = read('src/renderer/app.js');
+  assert.match(html, /id="newCategoryKeywords"/);
+  assert.match(app, /category-keywords-input/);
+  assert.match(app, /scan-category-select/);
+  assert.match(app, /item\.categoryMatch \? '自动匹配'/);
+});

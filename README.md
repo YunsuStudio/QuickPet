@@ -10,8 +10,8 @@
 
 <p>
   <img alt="Windows 10 和 11 x64" src="https://img.shields.io/badge/Windows-10%20%7C%2011%20x64-111111?style=flat-square&logo=windows&logoColor=white">
-  <img alt="版本 0.12.5" src="https://img.shields.io/badge/version-0.12.5-111111?style=flat-square">
-  <img alt="128 项测试通过" src="https://img.shields.io/badge/tests-128%20passed-111111?style=flat-square">
+  <img alt="版本 0.12.6" src="https://img.shields.io/badge/version-0.12.6-111111?style=flat-square">
+  <img alt="135 项测试通过" src="https://img.shields.io/badge/tests-135%20passed-111111?style=flat-square">
   <img alt="MIT 许可" src="https://img.shields.io/badge/license-MIT-111111?style=flat-square">
   <a href="https://github.com/YunsuStudio/QuickPet/actions/workflows/ci.yml"><img alt="CI 状态" src="https://github.com/YunsuStudio/QuickPet/actions/workflows/ci.yml/badge.svg"></a>
 </p>
@@ -31,7 +31,7 @@
 | 项目 | 说明 |
 | --- | --- |
 | 支持系统 | Windows 10 / 11 x64 |
-| 当前文件 | `QuickPet-Portable-0.12.5-x64.exe` |
+| 当前文件 | `QuickPet-Portable-0.12.6-x64.exe` |
 | 安装方式 | 无需安装，不自动创建快捷方式 |
 | 首次运行 | 在 EXE 同目录创建 `QuickPet-Portable-Cache` |
 | 数据位置 | 默认保存在本机，可备份和完整迁移 |
@@ -48,7 +48,7 @@
 | --- | --- |
 | 收纳网址、程序、文件夹、图片、音视频、文档、压缩包、代码、设计文件、`.lnk/.url` 与 Steam 等协议。可拖入面板，也可直接“投喂”桌宠。 | 桌宠会散步、奔跑、观察、休息和睡觉；主面板打开后仍会继续活动。 |
 | **不只靠鼠标**<br>使用全局搜索或快捷启动台，并可为全局入口和单个项目录制自定义组合键。 | **不限制外观**<br>使用 2D 图片、GIF、GLB、VRM 或 Live2D 模型，自定义大小、方向、动作和行为。 |
-| **自动整理**<br>通过分类规则、剪贴板收纳、动态文件夹和提醒减少重复操作。 | **数据留在本机**<br>图片抠图、模型读取、快捷数据和备份都在本地处理，不依赖云端账户。 |
+| **自动整理**<br>分类名称、专属关键词和智能规则共同识别内容；批量导入前可逐项修正。 | **数据留在本机**<br>图片抠图、模型读取、分类判断、快捷数据和备份都在本地处理，不依赖云端账户。 |
 
 ## 真实桌宠动作
 
@@ -118,11 +118,11 @@ npm test
 npm run build
 ```
 
-构建产物位于 `dist/QuickPet-Portable-0.12.5-x64.exe`。项目不会生成 NSIS、IExpress 或其他安装包。
+构建产物位于 `dist/QuickPet-Portable-0.12.6-x64.exe`。项目不会生成 NSIS、IExpress 或其他安装包。
 
 ## 测试状态
 
-当前 128 项自动测试全部通过，覆盖无内置分类、多级分类、自选文件夹与文件批量收纳、更新弹窗、缓存进度收起、维护并发、确认弹窗恢复、详细类型识别、手动排序、协议启动、搜索、启动台、组合键冲突回滚、桌宠投喂与拖动、透明区域点击、模型导入、备份恢复、发布构建兼容性和不同 DPI 双屏接缝等主要流程。
+当前 135 项自动测试全部通过，覆盖分类关键词、本地软件特征评分、模糊分类回退、批量预览修正、多级分类、自选文件夹与文件批量收纳、更新弹窗、缓存进度收起、维护并发、详细类型识别、协议启动、搜索、启动台、组合键冲突回滚、桌宠交互、模型导入、备份恢复和不同 DPI 双屏接缝等主要流程。
 
 性能记录：CPU `0.68%`、峰值内存 `332.6 MB`、3D 空闲帧率 `30.08 FPS`。
 

@@ -68,8 +68,15 @@ function candidateFromFile(filePath, source, readShortcutLink, includeRegularFil
   if (!stats.isFile()) return null;
   const extension = path.extname(filePath).toLowerCase();
   let target = '';
+  let classificationHints = [];
   if (extension === '.lnk') {
-    try { target = readShortcutLink(filePath)?.target ? filePath : ''; } catch {}
+    try {
+      const shortcut = readShortcutLink(filePath);
+      if (shortcut?.target) {
+        target = filePath;
+        classificationHints = [shortcut.target, shortcut.args, shortcut.description].filter(Boolean);
+      }
+    } catch {}
   } else if (extension === '.url') {
     target = parseInternetShortcut(filePath);
   } else if (includeRegularFiles && !/^(desktop\.ini|thumbs\.db)$/i.test(path.basename(filePath))) {
@@ -79,7 +86,8 @@ function candidateFromFile(filePath, source, readShortcutLink, includeRegularFil
     name: path.basename(filePath, extension),
     target,
     type: inferType(target),
-    source
+    source,
+    classificationHints
   } : null;
 }
 
@@ -118,11 +126,18 @@ function scanDesktop(roots, readShortcutLink) {
       const filePath = path.join(root, entry.name);
       const extension = path.extname(filePath).toLowerCase();
       let target = entry.isDirectory() ? filePath : '';
+      let classificationHints = [];
       if (extension === '.lnk') {
-        try { target = readShortcutLink(filePath)?.target ? filePath : ''; } catch {}
+        try {
+          const shortcut = readShortcutLink(filePath);
+          if (shortcut?.target) {
+            target = filePath;
+            classificationHints = [shortcut.target, shortcut.args, shortcut.description].filter(Boolean);
+          }
+        } catch {}
       } else if (extension === '.url') target = parseInternetShortcut(filePath);
       else if (!target) target = filePath;
-      if (target) output.push({ name: path.basename(entry.name, extension), target, type: inferType(target), source: '桌面' });
+      if (target) output.push({ name: path.basename(entry.name, extension), target, type: inferType(target), source: '桌面', classificationHints });
     }
   }
   return output;

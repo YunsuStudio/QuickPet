@@ -1034,21 +1034,38 @@ function registerIpc() {
   ipcMain.handle('shortcut:scan', async (_event, kind = 'all') => {
     const readShortcutLink = (filePath) => shell.readShortcutLink(filePath);
     const existingTargets = store.data.shortcuts.map((item) => item.target);
+    const prepareCandidates = (candidates) => candidates.map((candidate) => {
+      const match = store.suggestCategory(candidate);
+      return {
+        ...candidate,
+        category: match?.category || '',
+        categoryMatch: match ? { source: match.source, confidence: match.confidence, reason: match.reason } : null
+      };
+    });
+    if (isUiTest && kind === 'desktop') {
+      return prepareCandidates([
+        { name: 'ChatGPT', target: 'C:\\Test\\ChatGPT.lnk', type: 'app', source: '桌面', classificationHints: ['C:\\Apps\\ChatGPT\\ChatGPT.exe'] },
+        { name: 'Steam', target: 'C:\\Test\\Steam.lnk', type: 'app', source: '桌面', classificationHints: ['C:\\Apps\\Steam\\steam.exe'] },
+        { name: 'Visual Studio Code', target: 'C:\\Test\\VS Code.lnk', type: 'app', source: '桌面', classificationHints: ['C:\\Apps\\Microsoft VS Code\\Code.exe'] },
+        { name: '微信', target: 'C:\\Test\\微信.lnk', type: 'app', source: '桌面', classificationHints: ['C:\\Apps\\WeChat\\WeChat.exe'] },
+        { name: 'IDA Pro', target: 'C:\\Test\\IDA Pro.lnk', type: 'app', source: '桌面', classificationHints: ['C:\\Security\\IDA Pro\\ida64.exe'] }
+      ]);
+    }
     if (kind === 'folder') {
       const result = await dialog.showOpenDialog(panelWindow, {
         title: '选择要扫描的文件夹',
         properties: ['openDirectory', 'multiSelections']
       });
-      return result.canceled ? null : uniqueCandidates(scanLocalFolders(result.filePaths, readShortcutLink), existingTargets);
+      return result.canceled ? null : prepareCandidates(uniqueCandidates(scanLocalFolders(result.filePaths, readShortcutLink), existingTargets));
     }
     if (kind === 'files') {
       const result = await dialog.showOpenDialog(panelWindow, {
         title: '选择要批量收纳的文件',
         properties: ['openFile', 'multiSelections']
       });
-      return result.canceled ? null : uniqueCandidates(scanLocalFiles(result.filePaths, readShortcutLink), existingTargets);
+      return result.canceled ? null : prepareCandidates(uniqueCandidates(scanLocalFiles(result.filePaths, readShortcutLink), existingTargets));
     }
-    return scanSources(kind, { app, readShortcutLink, existingTargets });
+    return prepareCandidates(scanSources(kind, { app, readShortcutLink, existingTargets }));
   });
   ipcMain.handle('shortcut:import-scan', (_event, candidates) => {
     const added = [];
@@ -1059,6 +1076,9 @@ function registerIpc() {
           name: candidate.name,
           target: candidate.target,
           type: candidate.type,
+          category: candidate.category,
+          categoryMode: candidate.categoryEdited ? 'manual' : 'auto',
+          classificationHints: candidate.classificationHints,
           tags: candidate.source ? [candidate.source] : []
         }));
       } catch (error) {
@@ -1634,6 +1654,13 @@ if (!gotLock) {
         store.removeAllShortcuts();
         store.data.categories = [];
         store.data.rules = [];
+        for (const category of [
+          { name: '社交', keywords: ['微信', 'QQ'] },
+          { name: '娱乐', keywords: ['Steam'] },
+          { name: '开发', keywords: ['VS Code'] },
+          { name: 'AI工具', keywords: ['ChatGPT'] },
+          { name: '逆向安全', keywords: ['IDA Pro'] }
+        ]) store.addCategory(category);
         for (let index = 0; index < 12; index += 1) {
           store.addShortcut({
             name: index === 0 ? '一个名称很长但不应该挤坏布局的 Steam 游戏快捷方式' : `快捷项目 ${index + 1}`,
@@ -1665,11 +1692,31 @@ if (!gotLock) {
             const hotkeysScreenshot = await panelWindow.webContents.capturePage();
             const hotkeysScreenshotPath = path.join(process.cwd(), 'tests', 'settings-hotkeys.png');
             fs.writeFileSync(hotkeysScreenshotPath, hotkeysScreenshot.toPNG());
+            await panelWindow.webContents.executeJavaScript("document.getElementById('categorySettingsCard').scrollIntoView({block:'start'})");
+            await new Promise((resolve) => setTimeout(resolve, 250));
+            const categoriesScreenshot = await panelWindow.webContents.capturePage();
+            const categoriesScreenshotPath = path.join(process.cwd(), 'tests', 'settings-categories.png');
+            fs.writeFileSync(categoriesScreenshotPath, categoriesScreenshot.toPNG());
             await panelWindow.webContents.executeJavaScript("document.getElementById('itemHotkeysCard').scrollIntoView({block:'start'})");
             await new Promise((resolve) => setTimeout(resolve, 250));
             const organizerScreenshot = await panelWindow.webContents.capturePage();
             const organizerScreenshotPath = path.join(process.cwd(), 'tests', 'settings-organizer.png');
             fs.writeFileSync(organizerScreenshotPath, organizerScreenshot.toPNG());
+            await panelWindow.webContents.executeJavaScript("document.querySelector('.scan-button[data-scan=\"desktop\"]').click()");
+            await new Promise((resolve) => setTimeout(resolve, 280));
+            const scanScreenshot = await panelWindow.webContents.capturePage();
+            const scanScreenshotPath = path.join(process.cwd(), 'tests', 'scan-classification.png');
+            fs.writeFileSync(scanScreenshotPath, scanScreenshot.toPNG());
+            const scanClassification = await panelWindow.webContents.executeJavaScript(`(() => {
+              const selects = [...document.querySelectorAll('.scan-category-select')];
+              const automatic = selects.map((select) => select.selectedOptions[0]?.textContent.trim());
+              selects[0].value = '';
+              selects[0].dispatchEvent(new Event('change', { bubbles: true }));
+              const first = document.querySelector('.scan-preview-row');
+              const corrected = { category: first.querySelector('.scan-category-select').selectedOptions[0]?.textContent.trim(), state: first.querySelector('.scan-decision small').textContent };
+              document.getElementById('scanModalCloseButton').click();
+              return { automatic, corrected };
+            })()`);
             await panelWindow.webContents.executeJavaScript("document.querySelector('.model-center-card').scrollIntoView({block:'start'})");
             await new Promise((resolve) => setTimeout(resolve, 250));
             const modelScreenshot = await panelWindow.webContents.capturePage();
@@ -1754,13 +1801,14 @@ if (!gotLock) {
             console.log(`ui-test panel-bounds=${JSON.stringify(panelWindow.getBounds())}`);
             console.log(`ui-test sidebar-layout=${JSON.stringify(sidebarLayout)}`);
             console.log(`ui-test search-state=${JSON.stringify(searchState)} launcher-state=${JSON.stringify(launcherState)}`);
-            console.log(`ui-test modal-recovery=${JSON.stringify({ categoryConfirmOpened, categoryConfirmRecovered, clearConfirmOpened, clearConfirmRecovered, updatePromptOpened, updatePromptRecovered })} hotkey-conflict=${JSON.stringify(hotkeyConflict)}`);
-            console.log(`ui-test screenshots=${shortcutsScreenshotPath},${screenshotPath},${hotkeysScreenshotPath},${organizerScreenshotPath},${modelScreenshotPath},${automationScreenshotPath},${searchScreenshotPath},${launcherScreenshotPath}`);
+            console.log(`ui-test modal-recovery=${JSON.stringify({ categoryConfirmOpened, categoryConfirmRecovered, clearConfirmOpened, clearConfirmRecovered, updatePromptOpened, updatePromptRecovered })} hotkey-conflict=${JSON.stringify(hotkeyConflict)} classification=${JSON.stringify(scanClassification)}`);
+            console.log(`ui-test screenshots=${shortcutsScreenshotPath},${screenshotPath},${hotkeysScreenshotPath},${categoriesScreenshotPath},${organizerScreenshotPath},${scanScreenshotPath},${modelScreenshotPath},${automationScreenshotPath},${searchScreenshotPath},${launcherScreenshotPath}`);
             const categoryIds = store.data.categories.filter((item) => !item.id.startsWith('custom-')).map((item) => item.id);
             const panelHotkeyReady = await panelWindow.webContents.executeJavaScript(`document.getElementById('panelShortcutStatus')?.textContent === '已生效'`);
             const modalRecoveryPassed = categoryConfirmOpened && categoryConfirmRecovered && clearConfirmOpened && clearConfirmRecovered && updatePromptOpened && updatePromptRecovered;
             const hotkeyConflictPassed = hotkeyConflict.before === hotkeyConflict.after && hotkeyConflict.message.includes('已被系统或其他程序占用');
-            exitAutomatedTest(searchState.resultCount === 0 && launcherState.resultCount === 1 && panelHotkeyReady && modalRecoveryPassed && hotkeyConflictPassed && categoryIds.length === 0 ? 0 : 6);
+            const classificationPassed = JSON.stringify(scanClassification.automatic) === JSON.stringify(['AI工具', '娱乐', '开发', '社交', '逆向安全']) && scanClassification.corrected.category === '未分类' && scanClassification.corrected.state.includes('已调整');
+            exitAutomatedTest(searchState.resultCount === 0 && launcherState.resultCount === 1 && panelHotkeyReady && modalRecoveryPassed && hotkeyConflictPassed && classificationPassed && categoryIds.length === 0 ? 0 : 6);
           } catch (error) {
             console.error(error.stack || error.message);
             exitAutomatedTest(6);
